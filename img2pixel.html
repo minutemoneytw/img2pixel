@@ -66,7 +66,10 @@ input[type=checkbox]{accent-color:var(--gold)}
 #palGrid{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
 .sw{position:relative;width:26px;height:26px;border-radius:4px;border:1px solid var(--line);cursor:pointer}
 .sw input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-footer{display:flex;gap:10px;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line);min-height:130px}
+footer{display:flex;align-items:stretch;gap:10px;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line);min-height:130px}
+/* 匯出面板自己的高度握把（單獨調整，不影響幀列）：放在面板上緣，往上拖＝變高 */
+.expGrip{height:10px;margin-bottom:-4px}
+.expGrip::after{left:30%;right:30%}
 #stripPane{flex:1;display:flex;flex-direction:column;min-width:0}
 #strip{display:flex;flex-direction:column;gap:4px;padding:4px 8px;flex:1;min-height:0}
 .laneWrap{display:flex;gap:6px;flex:1;min-height:0}
@@ -152,6 +155,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
         <li>點幀 → <kbd>←→↑↓</kbd> 平移對位（<kbd>Shift</kbd>＝4 格），「重設位移」歸零，「洋蔥皮」看前一幀鬼影。<b>幀列有兩列工作列</b>：任何幀（來源或動畫）都能拖到任一列、自己決定上下怎麼分組（例如第一列走路、第二列攻擊，或兩個來源各一列）；列內直接拖曳＝重排（同一動作內；放到目標左半＝插前面、右半＝插後面），拖到列的空白處＝移到該列最後。新匯入的來源與新產生的動畫幀會落在「目前選中幀」的那一列。預覽<b>滾輪＝縮放</b>（往自己方向滾＝放大、反方向＝縮小，以游標為中心，左側縮放滑桿同步連動）；放大超出框時，框內<b>按住左鍵拖曳＝平移</b>（編輯模式中改用中鍵拖曳）。透明棋格底可切換：預覽列「<b>淺色棋格</b>」勾選＝白灰底（深色物件較清楚、較不傷眼），不勾＝深灰底（亮物件好辨識）；偏好會記住。</li>
         <li>「<b>編輯像素</b>」工具列：變成<b>浮動視窗</b>，抓左邊「⠿ 工具」握把就能用滑鼠拖到任意位置（位置會記住）。筆（可調粗 1～3、右鍵隨時＝擦）、橡皮擦、<b>填色</b>（按住左鍵可一路整片抹）、<b>指抹</b>（按住左鍵像手指把顏色抹開，經過的色被帶著走）、直線（拖曳預覽）、吸色（取完自動回筆）、<b>變形</b>（拖框圈選區域 → 左鍵拖動搬移、<kbd>Ctrl</kbd>+左鍵拖＝複製副本；<b>右鍵按住拖＝自由旋轉</b>選區、右鍵點一下＝取消選區；翻轉鈕只翻選區；輸入 1～364 度後 <b>↻↺</b> 照該角度順／逆時針轉選區內容；<kbd>Esc</kbd> 也＝取消選區）、<b>↶復原/↷重做</b>（Ctrl+Z / Ctrl+Y，一次筆劃或搬移＝一條）、左右/上下翻轉（沒有選區＝整幀）、清空（皆可復原）。</li>
         <li>「<b>複製此幀</b>」把選中的幀（連復原紀錄）複製一份插在後面——拿它當底改出細節不同的新幀很好用；同動作重新產生不會取代複製幀，匯出檔名會帶 <code>c</code>。「刪除此幀」、重新產生都會保留同動作其他幀（重新產生只取代同動作）。</li>
+        <li><b>版面可各自調整</b>：左右三欄寬度、<b>幀列高度</b>（左側「幀」面板上方那條分隔條）、以及<b>「匯出／專案」面板自己的高度</b>（該面板上緣的細握把，往上拖＝變高，<b>不會動到左邊幀列</b>；內容超過會自己捲動）；布局（含兩邊各自高度）會記住。</li>
       </ul>
       <b>常見問題</b>：
       <ul>
@@ -326,6 +330,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
   </div>
   <div class="spl spl-v" data-k="exp" title="拖曳調整匯出面板寬度"></div>
   <div class="pane" id="exportPane">
+    <div class="spl spl-h expGrip" id="expGrip" data-k="exph" title="拖曳＝單獨調整「匯出／專案」面板高度（往上拖＝變高；不影響左邊幀列，內容超過會自己捲動）"></div>
     <div class="body">
       <h3>匯出（1x 真實像素）</h3>
       <div class="row"><label>檔名前綴</label><input type="text" id="prefix" value="sprite"></div>
@@ -1883,7 +1888,8 @@ function makeDemo(){
 /* ============ 可調式面板：拖曳分隔條改變各工作區大小 ============ */
 (function(){
   const mainEl=document.querySelector('main'), footEl=document.querySelector('footer');
-  const MINP=260, MINEXP=220, MINFOOT=130;
+  const stripEl=document.getElementById('stripPane'), expEl=document.getElementById('exportPane');
+  const MINP=260, MINEXP=220, MINH=120;   // MINH＝幀列／匯出面板各自的最小高度
   const colsStr=c=>`${c[0]}px 10px ${c[1]}px 10px ${c[2]}px`;
   const mainCols=()=>mainEl.style.gridTemplateColumns?mainEl.style.gridTemplateColumns.split(' ').filter((_,i)=>i%2===0).map(v=>parseFloat(v)):null;
   // 第一次拖曳時把 main 的欄寬凍結成 px（之後拖曳只是改相鄰兩欄）
@@ -1891,13 +1897,21 @@ function makeDemo(){
     const w=[...mainEl.children].filter(el=>el.classList.contains('pane')).map(p=>Math.round(p.getBoundingClientRect().width));
     mainEl.style.gridTemplateColumns=colsStr(w);
   }
+  // 高度拖曳前，把兩個 pane 的高度各自凍結成 px（之後只改其中一個 → 兩邊可單獨調整高低）
+  function freezeHeights(){
+    stripEl.style.height=Math.round(stripEl.getBoundingClientRect().height)+'px';
+    expEl.style.height=Math.round(expEl.getBoundingClientRect().height)+'px';
+    expEl.style.alignSelf='flex-end';  // 匯出面板下緣貼齊底部 → 往上拖時上緣跟著游標（不受幀列高低影響）
+    footEl.style.height='';            // footer 高度改由兩個 pane 的最大值決定
+  }
   function saveLayout(){
     try{
       const c=mainCols();
       localStorage.setItem('i2p_layout',JSON.stringify({
         c:c&&c.every(v=>v>=MINP)?c:null,
-        eh:footEl.style.height?parseFloat(footEl.style.height):null,
-        ew:parseFloat($('exportPane').style.width)||null }));
+        sh:parseFloat(stripEl.style.height)||null,   // 幀列面板高度
+        xh:parseFloat(expEl.style.height)||null,     // 匯出／專案面板高度（可與幀列不同）
+        ew:parseFloat(expEl.style.width)||null }));
     }catch(e){}
   }
   function restoreLayout(){
@@ -1905,8 +1919,10 @@ function makeDemo(){
       const o=JSON.parse(localStorage.getItem('i2p_layout')||'null');
       if(!o||window.innerWidth<=1100) return;
       if(o.c) mainEl.style.gridTemplateColumns=colsStr(o.c);
-      if(o.eh>=MINFOOT) footEl.style.height=o.eh+'px';
-      if(o.ew>=MINEXP) $('exportPane').style.width=o.ew+'px';
+      if(o.sh>=MINH) stripEl.style.height=o.sh+'px';
+      else if(o.eh>=MINH) stripEl.style.height=o.eh+'px';   // 舊版只有一個共用高度：套到幀列（相容）
+      if(o.xh>=MINH){ expEl.style.height=o.xh+'px'; expEl.style.alignSelf='flex-end'; }
+      if(o.ew>=MINEXP) expEl.style.width=o.ew+'px';
     }catch(e){}
   }
   let drag=null;
@@ -1915,8 +1931,9 @@ function makeDemo(){
       e.preventDefault();
       const k=sp.dataset.k;
       let snap;
-      if(k==='exp') snap={w0:$('exportPane').getBoundingClientRect().width};
-      else if(sp.classList.contains('spl-h')) snap={h0:footEl.getBoundingClientRect().height};
+      if(k==='exp') snap={w0:expEl.getBoundingClientRect().width};
+      else if(k==='exph'){ freezeHeights(); snap={h0:parseFloat(expEl.style.height)}; }        // 匯出面板自己的高度握把
+      else if(sp.classList.contains('spl-h')){ freezeHeights(); snap={h0:parseFloat(stripEl.style.height)}; }  // 上方分隔條＝幀列高度
       else{ freezeMain(); snap={c:mainCols(),i:k==='0'?0:1}; }
       drag={sp,k,snap,x:e.clientX,y:e.clientY};
       sp.classList.add('drag');
@@ -1926,9 +1943,11 @@ function makeDemo(){
       if(!drag||drag.sp!==sp) return;
       const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
       if(drag.k==='exp'){
-        $('exportPane').style.width=Math.max(MINEXP,Math.min(640,drag.snap.w0-dx))+'px';
+        expEl.style.width=Math.max(MINEXP,Math.min(640,drag.snap.w0-dx))+'px';
+      }else if(drag.k==='exph'){
+        expEl.style.height=Math.max(MINH,Math.min(window.innerHeight*.8,drag.snap.h0-dy))+'px';   // 握把在上緣：往上拖＝變高
       }else if(sp.classList.contains('spl-h')){
-        footEl.style.height=Math.max(MINFOOT,Math.min(window.innerHeight*.7,drag.snap.h0-dy))+'px';
+        stripEl.style.height=Math.max(MINH,Math.min(window.innerHeight*.7,drag.snap.h0-dy))+'px'; // 往上拖＝幀列變高
       }else{
         const c=drag.snap.c.slice(), i=drag.snap.i;
         let a=c[i]+dx, b=c[i+1]-dx;              // 往右拖＝左欄變寬、右欄變窄
@@ -1943,8 +1962,8 @@ function makeDemo(){
     sp.addEventListener('pointerup',up);
     sp.addEventListener('pointercancel',up);
   });
-  addEventListener('resize',()=>{ // 窗口變窄回到響應式布局時，清掉凍結的欄寬
-    if(window.innerWidth<=1100){ mainEl.style.gridTemplateColumns=''; footEl.style.height=''; }
+  addEventListener('resize',()=>{ // 窗口變窄回到響應式布局時，清掉凍結的欄寬與各 pane 高度
+    if(window.innerWidth<=1100){ mainEl.style.gridTemplateColumns=''; stripEl.style.height=''; expEl.style.height=''; footEl.style.height=''; }
   });
   restoreLayout();
 })();
