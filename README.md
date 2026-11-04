@@ -14,6 +14,16 @@
 - **匯入 sheet**：把現成的水平 sprite sheet 切成幀重新編輯
 - **示範模式**：網址加 `?demo=1` 載入小騎士示範
 
+## 開始使用（Windows）
+
+**雙擊 `啟動工具.bat`**，它會在本機起一個小伺服器並開好瀏覽器（網址 `http://127.0.0.1:8799/img2pixel.html`）。用完把那個伺服器視窗關掉即可。
+
+> **為什麼不要直接雙擊 `img2pixel.html`？**
+> 用檔案開啟（`file://`）時，Chromium 會把「下載」的檔案標記成 **ZoneId=4（限制的網站）**，Windows 預設**封鎖開啟／解壓縮**（會跳「Windows 已封鎖了對這個檔案的存取」）。
+> 走 `http://127.0.0.1` 開就只會被標成一般網際網路（ZoneId=3），**存檔、解壓都正常**。
+> 真的已經被檔案直接開過、做出被封鎖的檔案時：右鍵該檔／該 ZIP →「內容」→ 勾**「解除封鎖」**→ 確定（或 PowerShell `Get-ChildItem 資料夾 | Unblock-File`）。
+> macOS／Linux：在資料夾執行 `python3 -m http.server 8799`，再開 `http://127.0.0.1:8799/img2pixel.html`。
+
 ## 使用說明
 
 詳見 **[img2pixel-guide.md](img2pixel-guide.md)**（工具內「說明？」按鈕同步同一份內容）。
@@ -21,4 +31,4 @@
 ## 注意
 
 - 匯出檔名規則：`prefix_act_NN.png`（act＝`_still/_walk/_fly/_atk/_idle`，複製幀帶 `c`）
-- 瀏覽器直接開檔（file://）即可完整使用；工具不會上傳任何資料
+- 工具完全在本機執行、不上傳任何資料（本機伺服器只服務這個資料夾）
