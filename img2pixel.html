@@ -80,6 +80,7 @@ footer{display:flex;gap:10px;padding:8px 10px;background:var(--panel);border-top
   color:var(--gold);padding:8px 18px;border-radius:8px;z-index:9;pointer-events:none;opacity:0;transition:opacity .25s}
 .toast.show{opacity:1}
 #helpBox{position:fixed;inset:0;background:#000b;z-index:20;display:flex;align-items:center;justify-content:center}
+#sheetBox{position:fixed;inset:0;background:#000b;z-index:20;display:flex;align-items:center;justify-content:center}
 .helpPanel{background:var(--panel);border:1px solid var(--gold);border-radius:10px;max-width:720px;width:92%;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 8px 40px #000c}
 .helpPanel h2{margin:0;padding:10px 16px;color:var(--gold);font-size:14px;letter-spacing:2px;border-bottom:1px solid var(--line)}
 .helpBody{overflow:auto;padding:12px 18px;font-size:13px}
@@ -102,6 +103,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
   <span class="hint">截圖 → 像素素材：拖圖進來、<kbd>Ctrl</kbd>+<kbd>V</kbd> 貼上</span>
   <span class="sp"></span>
   <button id="btnAdd">開檔加入</button>
+  <button id="btnSheetImp" title="把現成的水平 sprite sheet 切成一格格的幀匯入（切完可繼續編輯／改色）">匯入 sheet</button>
   <button id="btnDemo">載入示範</button>
   <button id="btnHelp" style="color:var(--gold)">說明 ？</button>
   <button id="btnClear">清空</button>
@@ -118,7 +120,9 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
         <li><b>去背</b>：模式用「<b>邊緣泛洪</b>」最安全（只去掉與圖片邊緣相連的背景色，畫面內同色物不會被誤刪）。按「滴管取色」→ 點背景色，或按「取角落色」自動取；再調「容許差」掃到乾淨為止。</li>
         <li><b>輸出尺寸</b>：「寬（格）」＝成品有幾個像素寬。人物全身建議 32～48、頭像 16～24、島主/大型 Boss 64+。取樣維持「最多色」銳利不失真。</li>
         <li><b>限色</b>：k-means 色數從 16 起手調。滿意後按「<b>鎖定調色盤</b>」——之後轉其他幀都會精確映射到同一組色，<b>多幀動畫必鎖</b>。色塊可直接點開改色。</li>
-        <li><b>匯出</b>：單幅 PNG／水平 sprite sheet／全部 ZIP，都是 1x 真實像素＋透明背景。「輸出倍率 4x」只是給你看細節用的。</li>
+        <li><b>匯出</b>：單幅 PNG／水平 sprite sheet／<b>GIF 動圖</b>（照預覽 fps 循環播放）／全部 ZIP，都是 1x 真實像素＋透明背景。「輸出倍率 4x」只是給你看細節用的。</li>
+        <li><b>專案存檔</b>：「存專案」把全部幀＋設定存成 .json（完整畫質，之後「開專案」原樣載回）；右下「自動存檔」會在每次操作後約 1 秒存進瀏覽器本機（來源圖縮到 512px 省空間），下次開啟會問你要不要接著上次做。「清空」也會清掉自動存檔。</li>
+        <li><b>匯入 sheet</b>：上方「匯入 sheet」把現成的水平 sprite sheet 切成一格格的幀——「格數」填幾張就自動算每格寬（高 &gt; 每格高 時會往下多列切）。切完就是一般來源幀，可繼續編輯／改色／重新匯出。</li>
       </ol>
       <b>動畫（預設自動產生）／靜物</b>：
       <ul>
@@ -245,6 +249,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
           <button id="btnPalExp">調色盤匯出</button>
           <button id="btnPalImp">匯入</button>
           <input type="file" id="palFile" accept=".json" class="hidden">
+<input type="file" id="sheetFile" accept="image/*" class="hidden">
         </div>
         <div id="palGrid"></div>
         <div class="row"><button id="btnPalAdd">＋加色</button><span class="note">點色塊改色；多幅動畫務必先鎖定再轉其他幅。</span></div>
@@ -305,12 +310,40 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
         <button id="btnExpOne" class="pri">單幅 PNG</button>
         <button id="btnExpSheet" class="pri">水平 sprite sheet</button>
       </div>
-      <div class="row"><button id="btnExpZip">全部 ZIP（frame_NN.png）</button></div>
-      <div class="note">sheet／ZIP＝水平排列、透明背景，之後直接接進遊戲的幀動畫。未鎖調色盤匯出多幅會先提醒。</div>
+      <div class="row">
+        <button id="btnExpGif" class="pri" title="輸出會循環播放的 GIF 動圖（照預覽 fps、限 256 色、1x 像素）">GIF 動圖</button>
+        <button id="btnExpZip">全部 ZIP（frame_NN.png）</button>
+      </div>
+      <div class="note">sheet／ZIP＝水平排列、透明背景；<b>GIF</b>＝照預覽 fps 播放（限 256 色、1-bit 透明遮罩，與 PNG 輸出可能略有色差）。未鎖調色盤匯出多幅會先提醒。</div>
+      <h3 style="margin-top:8px">專案</h3>
+      <div class="row">
+        <button id="btnProjSave" title="把全部幀＋全部設定存成 .json，之後「開專案」原樣載回">存專案</button>
+        <button id="btnProjOpen" title="載入之前存的專案檔">開專案</button>
+        <input type="file" id="projFile" accept=".json,application/json" class="hidden">
+      </div>
+      <div class="row"><label><input type="checkbox" id="autosave" checked> 自動存檔（本機瀏覽器）</label>
+        <button id="btnProjClear" title="清除瀏覽器裡的自動存檔">清自動存檔</button></div>
+      <div class="note" id="saveInfo">自動存檔：還沒存過（關鍵操作後約 1 秒自動存；來源圖會縮到 512px 以內，完整畫質請用「存專案」）</div>
     </div>
   </div>
 </footer>
 
+<div id="sheetBox" class="hidden">
+  <div class="helpPanel">
+    <h2>匯入 sprite sheet — 切幀</h2>
+    <div class="helpBody">
+      <div class="row"><label>原圖</label><span id="sheetImgInfo" class="note">-</span></div>
+      <div class="row"><label>格數</label><input type="number" id="sheetN" min="1" max="512" value="1">
+        <span class="note">水平有幾格（改這裡會連動「每格寬」）</span></div>
+      <div class="row"><label>每格</label>
+        <input type="number" id="sheetW" min="1" title="每格寬（改會連動格數）" style="width:60px"> ×
+        <input type="number" id="sheetH" min="1" title="每格高" style="width:60px"> px
+        <span id="sheetPlan" class="note">-</span></div>
+      <div class="note">本工具匯出的 sheet 都是單列水平排列，「格數」填幀數即可。原圖高 &gt; 每格高 時會自動往下多列切割。切出的幀會成為一般的來源幀（沿用目前管線設定：去背／限色等）。</div>
+    </div>
+    <div class="helpFoot"><button id="btnSheetGo" class="pri">切幀匯入</button> <button id="btnSheetCancel">取消</button></div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <script>
 'use strict';
@@ -750,7 +783,7 @@ function redoFrame(){ const f=cur(); if(!f||!f.hist||f.hist.i>=f.hist.arr.length
   f.hist.i++; f.baked=copyImg(f.hist.arr[f.hist.i]); markDirty(); return true; }
 function syncHistBtns(){ const f=cur(), h=f&&f.baked&&f.hist?f.hist:null;
   $('btnUndo').disabled=!(h&&h.i>0); $('btnRedo').disabled=!(h&&h.i<h.arr.length-1); }
-function markDirty(){ cache.delete(P.sel); renderPreview(); renderStrip(); syncHistBtns(); }
+function markDirty(){ cache.delete(P.sel); renderPreview(); renderStrip(); syncHistBtns(); scheduleSave(); }
 // 塗抹中的輕量重繪：只重畫主畫布本體，不重建 DOM、不碰縮圖
 function softRefresh(){
   const c=MAINC; if(!c) return;
@@ -1196,7 +1229,8 @@ const recomputeAll=debounce(()=>{ P.frames.forEach((_,i)=>processFrame(i)); proc
 function scheduleCompute(){ if(P.frames.length) recomputeAll(); }
 function renderAll(){ renderSource(); renderPreview(); renderStrip(); renderPalette();
   const f=cur();
-  $('outHV').textContent=(f&&f.crop&&!f.baked)?outH(f):'?'; }
+  $('outHV').textContent=(f&&f.crop&&!f.baked)?outH(f):'?';
+  scheduleSave(); }
 
 /* ============ 控制綁定 ============ */
 function bindRange(id,key,lab){ const el=$(id);
@@ -1431,6 +1465,248 @@ function zip(files){
   return new Blob([...parts,...central,eocd],{type:'application/zip'});
 }
 
+/* ============ GIF 動圖匯出（自製編碼：共用調色盤＋LZW、無限循環） ============ */
+// 收集全部幀的不透明用色 → ≤255 色的全域調色盤（高頻優先；超出者取樣時就近映射）；最後一格留給透明遮罩
+function gifPalette(frames){
+  const freq=new Map();
+  for(const f of frames) for(let i=0;i<f.px.length;i+=4){
+    if(f.px[i+3]<128) continue;
+    const k=f.px[i]<<16|f.px[i+1]<<8|f.px[i+2];
+    freq.set(k,(freq.get(k)||0)+1);
+  }
+  return [...freq.entries()].sort((a,b)=>b[1]-a[1]).slice(0,255)
+    .map(e=>[e[0]>>16&255,e[0]>>8&255,e[0]&255]);
+}
+// 幀像素 → 調色盤索引（透明格＝遮罩索引）；palMap 跨幀共用快取
+function gifIndices(f,pal,palMap){
+  const T=pal.length, out=new Uint8Array(f.w*f.h);
+  for(let p=0;p<out.length;p++){
+    const i=p*4;
+    if(f.px[i+3]<128){ out[p]=T; continue; }
+    const k=f.px[i]<<16|f.px[i+1]<<8|f.px[i+2];
+    let v=palMap.get(k);
+    if(v===undefined){
+      let bi=0,bd=Infinity;
+      for(let ci=0;ci<pal.length;ci++){ const d=dist2(f.px[i],f.px[i+1],f.px[i+2],pal[ci][0],pal[ci][1],pal[ci][2]); if(d<bd){bd=d;bi=ci;} }
+      v=bi; palMap.set(k,v);
+    }
+    out[p]=v;
+  }
+  return out;
+}
+// GIF 的 LZW 壓縮（加碼慣例：先升 codeSize 再登字典，解碼端相符）
+function lzwGif(idx,minCode){
+  const clear=1<<minCode, eoi=clear+1;
+  let codeSize=minCode+1, next=eoi+1;
+  const dict=new Map(), out=[];
+  let acc=0, bit=0;
+  const emit=c=>{ acc|=c<<bit; bit+=codeSize;
+    while(bit>=8){ out.push(acc&255); acc>>>=8; bit-=8; } };
+  emit(clear);
+  let cur=idx[0];
+  for(let i=1;i<idx.length;i++){
+    const c=idx[i], hit=dict.get(cur*256+c);
+    if(hit!==undefined){ cur=hit; continue; }
+    emit(cur);
+    if(next===4096){ emit(clear); dict.clear(); next=eoi+1; codeSize=minCode+1; }
+    else{ if(next>=(1<<codeSize)) codeSize++; dict.set(cur*256+c,next++); }
+    cur=c;
+  }
+  emit(cur); emit(eoi);
+  if(bit>0) out.push(acc&255);
+  const blocks=[];
+  for(let i=0;i<out.length;i+=255){ const n=Math.min(255,out.length-i); blocks.push(n,...out.slice(i,i+n)); }
+  blocks.push(0);
+  return Uint8Array.from(blocks);
+}
+function upPx(img,s){ // 最近鄰整數放大（GIF 跟著「輸出倍率」走）
+  if(s<=1) return img;
+  const o={w:img.w*s,h:img.h*s,px:new Uint8ClampedArray(img.w*s*img.h*s*4)};
+  for(let y=0;y<o.h;y++)for(let x=0;x<o.w;x++){
+    const si=((y/s|0)*img.w+(x/s|0))*4, di=(y*o.w+x)*4;
+    o.px[di]=img.px[si]; o.px[di+1]=img.px[si+1]; o.px[di+2]=img.px[si+2]; o.px[di+3]=img.px[si+3];
+  }
+  return o;
+}
+function gifEncode(frames,pal,delay){
+  const w16=v=>[v&255,v>>>8&255];
+  const T=pal.length;                                  // 透明遮罩＝調色盤最後一格
+  let bits=1; while(bits<8&&(1<<bits)<T+1) bits++;
+  const minCode=Math.max(2,bits);
+  const gw=Math.max(...frames.map(f=>f.w)), gh=Math.max(...frames.map(f=>f.h));
+  const parts=[];
+  parts.push(new Uint8Array([71,73,70,56,57,97, ...w16(gw),...w16(gh), 0x80|(bits-1), 0, 0])); // GIF89a＋全域調色盤旗標
+  const gct=[];
+  for(let i=0;i<(1<<bits);i++){ const c=pal[i]||[0,0,0]; gct.push(c[0],c[1],c[2]); }
+  parts.push(new Uint8Array(gct));
+  parts.push(new Uint8Array([0x21,0xFF,0x0B,...new TextEncoder().encode('NETSCAPE2.0'),3,1,0,0,0])); // 無限循環
+  const palMap=new Map();
+  for(const f of frames){
+    parts.push(new Uint8Array([0x21,0xF9,0x04,(2<<2)|1,...w16(delay),T,0]));   // 處置法 2（還原成透明）＋遮罩
+    parts.push(new Uint8Array([0x2C,0,0,0,0,...w16(f.w),...w16(f.h),0]));      // 影像描述：左上 (0,0)、無區域調色盤
+    parts.push(new Uint8Array([minCode]));
+    parts.push(lzwGif(gifIndices(f,pal,palMap),minCode));
+  }
+  parts.push(new Uint8Array([0x3B]));
+  return new Blob(parts,{type:'image/gif'});
+}
+$('btnExpGif').onclick=()=>{ const set=exportSet(); if(!set.length) return toast('尚無幀可匯出');
+  if(set.some(x=>!x.fr.baked)&&set.length>1&&!warnUnlocked(set.length)) return;
+  const act=cur().meta?`_${cur().meta.action}`:'';
+  const frames=set.map(x=>upPx(processFrame(x.i),Math.max(1,P.exp.scale)));
+  const pal=gifPalette(frames);
+  const delay=Math.max(2,Math.round(100/(+$('fps').value||8)));
+  dl(gifEncode(frames,pal,delay), `${P.exp.prefix}${act}_anim.gif`);
+  toast(`已匯出 GIF（${frames.length} 幀、${$('fps').value} fps、循環播放）——GIF 限 256 色，與 PNG 可能略有色差`); };
+
+/* ============ 專案存檔（.json 完整版＋localStorage 自動存檔） ============ */
+function imgDataURL(im,max){
+  const s=Math.min(1,(max||65536)/Math.max(im.width,im.height));
+  const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(im.width*s)); c.height=Math.max(1,Math.round(im.height*s));
+  c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+  return {url:c.toDataURL('image/png'), s};
+}
+function pxB64(u8){ let s='';
+  for(let i=0;i<u8.length;i+=49152) s+=String.fromCharCode.apply(null,u8.subarray(i,Math.min(u8.length,i+49152)));
+  return btoa(s); }
+function b64Px(b){ const s=atob(b), u=new Uint8ClampedArray(s.length);
+  for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
+function projectJSON(opt){
+  // opt.maxImg：來源圖縮到這個邊長以內（自動存檔用，裁切座標同步縮）；opt.noHist：連復原紀錄也省下
+  return JSON.stringify({ app:'img2pixel', ver:1,
+    settings:{ bg:P.bg, out:P.out, adj:P.adj,
+      q:{on:P.q.on,k:P.q.k,locked:P.q.locked,colors:P.q.colors}, cl:P.cl, vw:P.vw, exp:P.exp },
+    frames:P.frames.map(f=>{
+      const o={ t:f.baked?'baked':'src', name:f.name, dx:f.dx, dy:f.dy, lane:f.lane||0, meta:f.meta||null };
+      if(f.baked){ o.w=f.baked.w; o.h=f.baked.h; o.px=pxB64(f.baked.px); }
+      else{ const d=imgDataURL(f.img,opt&&opt.maxImg); o.src=d.url;
+        o.crop={x:Math.round(f.crop.x*d.s),y:Math.round(f.crop.y*d.s),w:Math.round(f.crop.w*d.s),h:Math.round(f.crop.h*d.s)}; }
+      if(f.hist&&!(opt&&opt.noHist)) o.hist={arr:f.hist.arr.map(h=>pxB64(h.px)), i:f.hist.i};
+      return o;
+    }), sel:P.sel });
+}
+async function loadProject(text){
+  let j; try{ j=JSON.parse(text); }catch(e){ return toast('專案檔解析失敗'); }
+  if(j.app!=='img2pixel'||!Array.isArray(j.frames)) return toast('這不是 img2pixel 的專案檔');
+  if(S_play.on) playStop();
+  S_edit.sel=null; S_edit.on=false; $('btnEdit').classList.remove('on'); $('editBar').classList.add('hidden');
+  const st=j.settings||{};
+  Object.assign(P.bg,st.bg||{}); Object.assign(P.out,st.out||{}); Object.assign(P.adj,st.adj||{});
+  Object.assign(P.cl,st.cl||{}); Object.assign(P.vw,st.vw||{}); Object.assign(P.exp,st.exp||{});
+  P.q.on=st.q?st.q.on!==false:true; P.q.k=st.q?st.q.k:16; P.q.locked=st.q?!!st.q.locked:false; P.q.colors=(st.q&&st.q.colors)||[];
+  const frames=[];
+  for(const o of j.frames){
+    if(!o||!o.t) continue;
+    if(o.t==='baked'){
+      if(!o.px||!o.w) continue;
+      const fr={baked:{w:o.w,h:o.h,px:b64Px(o.px)}, name:o.name||'幀', dx:o.dx||0, dy:o.dy||0, lane:o.lane||0};
+      if(o.meta) fr.meta=o.meta;
+      if(o.hist&&o.hist.arr) fr.hist={arr:o.hist.arr.map(b=>({w:o.w,h:o.h,px:b64Px(b)})), i:o.hist.i|0};
+      frames.push(fr);
+    }else{
+      if(!o.src) continue;
+      const im=new Image();
+      await new Promise(res=>{ im.onload=res; im.onerror=()=>{ toast('專案內有圖讀失敗：'+(o.name||'')); res(); }; im.src=o.src; });
+      if(!im.width) continue;
+      frames.push({img:im, name:o.name||'來源', crop:o.crop||{x:0,y:0,w:im.width,h:im.height}, dx:o.dx||0, dy:o.dy||0, lane:o.lane||0, meta:o.meta||undefined});
+    }
+  }
+  P.frames=frames; P.sel=clamp(j.sel|0,0,Math.max(0,frames.length-1));
+  syncUI(); invalidate(); renderAll();
+  toast(`已載入專案：${frames.length} 幀${P.q.locked?'（調色盤已鎖定）':''}`);
+}
+function syncUI(){  // 還原 P → 面板控制項（與 applyBind 反向）
+  $('bgMode').value=P.bg.mode; $('tol').value=P.bg.tol; $('tolV').textContent=P.bg.tol;
+  $('keyColor').value=hexOf(...P.bg.color); $('keySw').style.background=$('keyColor').value;
+  $('outW').value=P.out.w; $('sampling').value=P.out.sampling;
+  $('adjB').value=P.adj.b; $('adjC').value=P.adj.c; $('adjS').value=P.adj.s;
+  $('adjBV').textContent=P.adj.b; $('adjCV').textContent=P.adj.c; $('adjSV').textContent=P.adj.s;
+  $('qOn').checked=P.q.on; $('qK').value=P.q.k; $('qKV').textContent=P.q.k; $('qLock').checked=P.q.locked;
+  $('despeckle').value=P.cl.despeckle; $('outline').checked=!!P.cl.outline;
+  $('outColor').value=hexOf(...P.cl.oc); $('outSw').style.background=$('outColor').value;
+  $('zoom').value=P.vw.zoom; $('zoomV').textContent=P.vw.zoom+'x';
+  $('grid').checked=!!P.vw.grid; $('onion').checked=!!P.vw.onion;
+  $('prefix').value=P.exp.prefix; $('expScale').value=P.exp.scale;
+  renderPalette();
+}
+const AUTO_KEY='img2pixel_auto';
+let autoTimer=0, saveFailNoted=false;
+function scheduleSave(){ if(!$('autosave').checked) return;
+  clearTimeout(autoTimer); autoTimer=setTimeout(doAutoSave,1200); }
+function doAutoSave(){
+  if(!P.frames.length){ localStorage.removeItem(AUTO_KEY); $('saveInfo').textContent='自動存檔：（目前沒有幀）'; return; }
+  try{
+    localStorage.setItem(AUTO_KEY,projectJSON({maxImg:512}));
+    $('saveInfo').textContent=`自動存檔 ${new Date().toTimeString().slice(0,8)}（本機瀏覽器；來源圖縮至 512px）`;
+  }catch(e){
+    try{ localStorage.setItem(AUTO_KEY,projectJSON({maxImg:384,noHist:true}));
+      $('saveInfo').textContent=`自動存檔 ${new Date().toTimeString().slice(0,8)}（空間不足，已略過復原紀錄）`;
+    }catch(e2){ if(!saveFailNoted){ saveFailNoted=true; toast('自動存檔失敗：內容過大——請用「存專案」輸出 .json 備份'); } }
+  }
+}
+window.addEventListener('beforeunload',()=>{ try{
+  if(P.frames.length&&$('autosave').checked) localStorage.setItem(AUTO_KEY,projectJSON({maxImg:512,noHist:true}));
+}catch(e){} });
+$('btnProjSave').onclick=()=>{ if(!P.frames.length) return toast('尚無幀可存');
+  dl(new Blob([projectJSON()],{type:'application/json'}), `${P.exp.prefix}_project.json`);
+  toast('專案已輸出（完整畫質、含復原紀錄）'); };
+$('btnProjOpen').onclick=()=>$('projFile').click();
+$('projFile').onchange=async e=>{ const f=e.target.files[0]; if(f) await loadProject(await f.text()); e.target.value=''; };
+$('btnProjClear').onclick=()=>{ localStorage.removeItem(AUTO_KEY); $('saveInfo').textContent='自動存檔已清除'; toast('已清除本機自動存檔'); };
+
+/* ============ 匯入 sprite sheet → 切幀 ============ */
+const S_sheet={img:null,name:''};
+$('btnSheetImp').onclick=()=>$('sheetFile').click();
+$('sheetFile').onchange=e=>{ const f=e.target.files&&e.target.files[0]; e.target.value='';
+  if(!f) return;
+  const im=new Image();
+  im.onload=()=>{ S_sheet.img=im; S_sheet.name=f.name.replace(/\.[^.]+$/,'')||'sheet';
+    $('sheetImgInfo').textContent=`${S_sheet.name}（${im.width}×${im.height}px）`;
+    let n=clamp(Math.round(im.width/im.height)||1,1,512);          // 預設猜方形格：格數＝寬÷高
+    $('sheetN').value=n; $('sheetW').value=Math.floor(im.width/n); $('sheetH').value=im.height;
+    updSheetPlan(); $('sheetBox').classList.remove('hidden'); };
+  im.onerror=()=>toast('讀圖失敗');
+  im.src=URL.createObjectURL(f); };
+function updSheetPlan(){
+  const im=S_sheet.img; if(!im) return;
+  const fw=clamp(Math.round(+$('sheetW').value)||1,1,im.width), fh=clamp(Math.round(+$('sheetH').value)||1,1,im.height);
+  const cols=Math.floor(im.width/fw), rows=Math.floor(im.height/fh);
+  $('sheetPlan').textContent=`＝水平 ${cols} 格 × 垂直 ${rows} 列（共 ${cols*rows} 幀）`;
+}
+$('sheetN').oninput=()=>{ const im=S_sheet.img; if(!im) return;
+  const n=clamp(Math.round(+$('sheetN').value)||1,1,512);
+  $('sheetW').value=Math.floor(im.width/n); updSheetPlan(); };
+$('sheetW').oninput=()=>{ const im=S_sheet.img; if(!im) return;
+  const fw=Math.max(1,Math.round(+$('sheetW').value)||1);
+  $('sheetN').value=clamp(Math.round(im.width/fw)||1,1,512); updSheetPlan(); };
+$('sheetH').oninput=updSheetPlan;
+$('btnSheetCancel').onclick=()=>$('sheetBox').classList.add('hidden');
+$('sheetBox').onclick=e=>{ if(e.target===$('sheetBox')) $('sheetBox').classList.add('hidden'); };
+$('btnSheetGo').onclick=async()=>{
+  const im=S_sheet.img; if(!im) return;
+  const fw=Math.max(1,Math.round(+$('sheetW').value)||1), fh=Math.max(1,Math.round(+$('sheetH').value)||1);
+  if(fw>im.width||fh>im.height) return toast('每格尺寸大於原圖——請調小');
+  const cols=Math.floor(im.width/fw), rows=Math.floor(im.height/fh);
+  if(cols*rows<1) return toast('切不出任何格子——檢查每格寬高');
+  if(cols*rows>512) return toast(`會切出 ${cols*rows} 幀，一次最多 512 幀——把每格加大一點`);
+  const c=document.createElement('canvas'); c.width=fw; c.height=fh;
+  const ctx=c.getContext('2d');
+  const jobs=[];
+  for(let r=0;r<rows;r++)for(let col=0;col<cols;col++){
+    ctx.clearRect(0,0,fw,fh);
+    ctx.drawImage(im,col*fw,r*fh,fw,fh,0,0,fw,fh);
+    const g=new Image();
+    jobs.push(new Promise(res=>{ g.onload=()=>res(g); g.onerror=()=>res(null); g.src=c.toDataURL('image/png'); }));
+  }
+  const imgs=(await Promise.all(jobs)).filter(Boolean);
+  const firstName=`${S_sheet.name}_0`;
+  imgs.forEach((g,i)=>addFrame(g,`${S_sheet.name}_${i}`));
+  const k=P.frames.findIndex(f=>f.name===firstName);   // 選回第一張切出的幀
+  if(k>=0){ P.sel=k; invalidate(); renderAll(); }
+  $('sheetBox').classList.add('hidden');
+  toast(`已切出 ${imgs.length} 幀（每格 ${fw}×${fh}）——沿用目前管線設定，先確認去背／限色再逐一轉出`);
+};
+
 /* ============ 示範圖（?demo=1）：三幅走路的小騎士 ============ */
 function makeDemo(){
   const bg='#262b33';
@@ -1478,6 +1754,12 @@ function makeDemo(){
   $('btnHelpClose').onclick=()=>$('helpBox').classList.add('hidden');
   $('helpBox').onclick=e=>{ if(e.target===$('helpBox')) $('helpBox').classList.add('hidden'); };
   if(new URLSearchParams(location.search).has('demo')) makeDemo();
+  else{ // 有自動存檔就問要不要接著上次做
+    let au=null; try{ au=localStorage.getItem(AUTO_KEY); }catch(e){}
+    if(au){ try{ const j=JSON.parse(au);
+      if(Array.isArray(j.frames)&&j.frames.length&&confirm(`發現上次的自動存檔（${j.frames.length} 幀）——要載入繼續嗎？`)) loadProject(au);
+    }catch(e){} }
+  }
 })();
 </script>
 </body>
