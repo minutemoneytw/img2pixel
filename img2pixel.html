@@ -98,7 +98,11 @@ footer{display:flex;gap:10px;padding:8px 10px;background:var(--panel);border-top
 .helpFoot{padding:10px 16px;border-top:1px solid var(--line);text-align:right}
 .tbtn{padding:2px 8px;font-size:12px}
 .tbtn.on{border-color:var(--accent);color:var(--accent)}
-#editBar{display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap}
+/* 編輯像素的浮動工具列：可拖曳自由擺放 */
+#editBar{position:fixed;z-index:12;display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap;
+  background:var(--panel);border:1px solid var(--gold);border-radius:8px;padding:6px 8px;box-shadow:0 6px 24px #000b;max-width:360px}
+#editBar .grip{cursor:grab;user-select:none;touch-action:none;color:var(--dim);font-size:11px;letter-spacing:1px;padding:0 5px 0 2px}
+#editBar .grip:active{cursor:grabbing;color:var(--gold)}
 #editBar select{padding:2px 4px}
 .hidden{display:none!important}
 kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:11px}
@@ -145,7 +149,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
       <b>手動微調（自動之後接手）</b>：
       <ul>
         <li>點幀 → <kbd>←→↑↓</kbd> 平移對位（<kbd>Shift</kbd>＝4 格），「重設位移」歸零，「洋蔥皮」看前一幀鬼影。<b>幀列有兩列工作列</b>：任何幀（來源或動畫）都能拖到任一列、自己決定上下怎麼分組（例如第一列走路、第二列攻擊，或兩個來源各一列）；列內直接拖曳＝重排（同一動作內；放到目標左半＝插前面、右半＝插後面），拖到列的空白處＝移到該列最後。新匯入的來源與新產生的動畫幀會落在「目前選中幀」的那一列。預覽<b>滾輪＝縮放</b>（往自己方向滾＝放大、反方向＝縮小，以游標為中心，左側縮放滑桿同步連動）；放大超出框時，框內<b>按住左鍵拖曳＝平移</b>（編輯模式中改用中鍵拖曳）。</li>
-        <li>「<b>編輯像素</b>」工具列：筆（可調粗 1～3、右鍵隨時＝擦）、橡皮擦、<b>填色</b>（按住左鍵可一路整片抹）、<b>指抹</b>（按住左鍵像手指把顏色抹開，經過的色被帶著走）、直線（拖曳預覽）、吸色（取完自動回筆）、<b>變形</b>（拖框圈選區域 → 左鍵拖動搬移、<kbd>Ctrl</kbd>+左鍵拖＝複製副本；<b>右鍵按住拖＝自由旋轉</b>選區、右鍵點一下＝取消選區；翻轉鈕只翻選區；輸入 1～364 度後 <b>↻↺</b> 照該角度順／逆時針轉選區內容；<kbd>Esc</kbd> 也＝取消選區）、<b>↶復原/↷重做</b>（Ctrl+Z / Ctrl+Y，一次筆劃或搬移＝一條）、左右/上下翻轉（沒有選區＝整幀）、清空（皆可復原）。</li>
+        <li>「<b>編輯像素</b>」工具列：變成<b>浮動視窗</b>，抓左邊「⠿ 工具」握把就能用滑鼠拖到任意位置（位置會記住）。筆（可調粗 1～3、右鍵隨時＝擦）、橡皮擦、<b>填色</b>（按住左鍵可一路整片抹）、<b>指抹</b>（按住左鍵像手指把顏色抹開，經過的色被帶著走）、直線（拖曳預覽）、吸色（取完自動回筆）、<b>變形</b>（拖框圈選區域 → 左鍵拖動搬移、<kbd>Ctrl</kbd>+左鍵拖＝複製副本；<b>右鍵按住拖＝自由旋轉</b>選區、右鍵點一下＝取消選區；翻轉鈕只翻選區；輸入 1～364 度後 <b>↻↺</b> 照該角度順／逆時針轉選區內容；<kbd>Esc</kbd> 也＝取消選區）、<b>↶復原/↷重做</b>（Ctrl+Z / Ctrl+Y，一次筆劃或搬移＝一條）、左右/上下翻轉（沒有選區＝整幀）、清空（皆可復原）。</li>
         <li>「<b>複製此幀</b>」把選中的幀（連復原紀錄）複製一份插在後面——拿它當底改出細節不同的新幀很好用；同動作重新產生不會取代複製幀，匯出檔名會帶 <code>c</code>。「刪除此幀」、重新產生都會保留同動作其他幀（重新產生只取代同動作）。</li>
       </ul>
       <b>常見問題</b>：
@@ -1366,7 +1370,8 @@ $('btnPlay').onclick=()=> S_play.on?playStop():playStart();
 $('fps').onchange=()=>{ if(S_play.on){ clearTimeout(S_play.timer); playTick(); } };
 /* 像素編輯 */
 $('btnEdit').onclick=()=>{ S_edit.on=!S_edit.on; $('btnEdit').classList.toggle('on',S_edit.on);
-  $('editBar').classList.toggle('hidden',!S_edit.on); if(S_edit.on&&S_play.on) playStop(); if(S_edit.on) setTool(S_edit.tool); renderPreview(); syncHistBtns(); };
+  $('editBar').classList.toggle('hidden',!S_edit.on); if(S_edit.on&&S_play.on) playStop(); if(S_edit.on) setTool(S_edit.tool); renderPreview(); syncHistBtns();
+  if(S_edit.on) placeEditBar(); };
 document.querySelectorAll('#editBar .tbtn[data-tool]').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
 $('brushSize').onchange=e=>{ S_edit.size=+e.target.value; };
 $('btnUndo').onclick=undoFrame;
@@ -1872,6 +1877,39 @@ function makeDemo(){
     if(window.innerWidth<=1100){ mainEl.style.gridTemplateColumns=''; footEl.style.height=''; }
   });
   restoreLayout();
+})();
+
+/* ============ 浮動編輯工具列：握把拖曳自由擺放、記住位置 ============ */
+(function(){
+  const bar=$('editBar'), grip=document.createElement('span');
+  grip.className='grip'; grip.textContent='⠿ 工具'; grip.title='拖曳移動工具列';
+  bar.prepend(grip);
+  const KEY='i2p_editbar';
+  let pos=null; try{ pos=JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){}
+  function clamp(x,y){
+    x=Math.max(4,Math.min(innerWidth-bar.offsetWidth-4,x));
+    y=Math.max(4,Math.min(innerHeight-bar.offsetHeight-4,y));
+    return [x,y];
+  }
+  function place(x,y){ [x,y]=clamp(x,y); bar.style.left=x+'px'; bar.style.top=y+'px'; }
+  function save(){ const p={x:parseInt(bar.style.left,10),y:parseInt(bar.style.top,10)};
+    if(Number.isFinite(p.x)&&Number.isFinite(p.y)){ pos=p; try{ localStorage.setItem(KEY,JSON.stringify(p)); }catch(e){} } }
+  // 顯示工具列時就位：有記住位置用記住的，否則放在「編輯像素」按鈕下方
+  window.placeEditBar=()=>{
+    if(pos&&pos.x>=0&&pos.y>=0){ place(pos.x,pos.y); return; }
+    const r=$('btnEdit').getBoundingClientRect();
+    place(r.left,r.bottom+6);
+  };
+  let drag=null;
+  grip.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    const r=bar.getBoundingClientRect();
+    drag={dx:e.clientX-r.left,dy:e.clientY-r.top};
+    grip.setPointerCapture(e.pointerId);
+  });
+  grip.addEventListener('pointermove',e=>{ if(drag) place(e.clientX-drag.dx,e.clientY-drag.dy); });
+  const up=()=>{ if(drag){ drag=null; save(); } };
+  grip.addEventListener('pointerup',up); grip.addEventListener('pointercancel',up);
 })();
 
 /* ============ 啟動 ============ */
