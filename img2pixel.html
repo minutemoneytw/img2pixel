@@ -243,7 +243,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
       <section>
         <h3>限色（k-means）</h3>
         <div class="row"><label><input type="checkbox" id="qOn" checked> 啟用</label>
-          <label>色數 <input type="range" id="qK" min="4" max="64" value="16"><span class="val" id="qKV">16</span></label>
+          <label>色數 <input type="range" id="qK" min="4" max="256" value="16"><span class="val" id="qKV">16</span></label>
         </div>
         <div class="row"><label><input type="checkbox" id="qLock"> 鎖定調色盤</label>
           <button id="btnPalExp">調色盤匯出</button>
@@ -495,7 +495,17 @@ function kmeans(img, k){
     if(centers.length>=k) break;
     if(centers.every(c=>dist2(c[0],c[1],c[2],u[0],u[1],u[2])>24*24*15)) centers.push([u[0],u[1],u[2]]);
   }
-  while(centers.length<Math.min(k,uniq.length)) centers.push(uniq[centers.length].slice(0,3));
+  // 播種後仍不足 k：用「離現有中心最遠」的色補位（遠點取樣），大色數（如 256）才能真正鋪開
+  const minD=new Float64Array(uniq.length);
+  for(const c of centers) for(let i=0;i<uniq.length;i++){ const u=uniq[i], d=dist2(c[0],c[1],c[2],u[0],u[1],u[2]); if(d<minD[i]) minD[i]=d; }
+  while(centers.length<Math.min(k,uniq.length)){
+    let bi=-1,bd=-1;
+    for(let i=0;i<uniq.length;i++) if(minD[i]>bd){bd=minD[i];bi=i;}
+    if(bd<=0) break;                       // 全部都貼著現有中心＝沒得再分
+    const u=uniq[bi]; centers.push([u[0],u[1],u[2]]);
+    for(let i=0;i<uniq.length;i++){ const d=dist2(u[0],u[1],u[2],uniq[i][0],uniq[i][1],uniq[i][2]); if(d<minD[i]) minD[i]=d; }
+    minD[bi]=0;
+  }
   for(let it=0;it<12;it++){
     const sums=centers.map(()=>[0,0,0,0]);
     for(const [r,g,b,n] of uniq){
@@ -511,10 +521,27 @@ function kmeans(img, k){
     }
     if(moved<1) break;
   }
-  // 收斂可能撞出重複中心——去重，重複者佔回次高頻色
+  // 收斂可能撞出重複中心——去重
   const seen=new Set(), out=[];
   for(const c of centers.map(c=>[Math.round(c[0]),Math.round(c[1]),Math.round(c[2])])){
     const k=c.join(','); if(seen.has(k)) continue; seen.add(k); out.push(c);
+  }
+  // 去重後仍不足 k：以「離已選中心最遠」的實際圖色補位（遠點取樣），256 色上限才真的給得滿
+  const want=Math.min(k,uniq.length);
+  if(out.length<want){
+    const md=new Float64Array(uniq.length);
+    for(let i=0;i<uniq.length;i++){ let m=Infinity;
+      for(const c of out){ const d=dist2(uniq[i][0],uniq[i][1],uniq[i][2],c[0],c[1],c[2]); if(d<m)m=d; }
+      md[i]=m; }
+    while(out.length<want){
+      let bi=-1,bd=-1;
+      for(let i=0;i<uniq.length;i++) if(md[i]>bd){bd=md[i];bi=i;}
+      if(bd<=0) break;                     // 全部都貼著現有中心＝沒得再分
+      const u=uniq[bi], c=[Math.round(u[0]),Math.round(u[1]),Math.round(u[2])], key=c.join(',');
+      if(!seen.has(key)){ seen.add(key); out.push(c); }
+      md[bi]=0;
+      for(let i=0;i<uniq.length;i++){ const d=dist2(u[0],u[1],u[2],uniq[i][0],uniq[i][1],uniq[i][2]); if(d<md[i]) md[i]=d; }
+    }
   }
   return out;
 }
