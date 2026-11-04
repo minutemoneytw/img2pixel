@@ -1580,10 +1580,11 @@ function zip(files){
   const w16=v=>[v&255,(v>>>8)&255], w32=v=>[v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255];
   for(const f of files){
     const name=enc.encode(f.name), crc=crc32(f.data), sz=f.data.length;
-    const head=new Uint8Array([80,75,3,4, ...w16(20),...w16(0),...w16(0),...w16(0),...w16(0),
+    // 通用旗標 0x0800＝檔名為 UTF-8（中文前綴必需；否則 Windows 解讀成亂碼→無法解壓）
+    const head=new Uint8Array([80,75,3,4, ...w16(20),...w16(0x0800),...w16(0),...w16(0),...w16(0),
       ...w32(crc),...w32(sz),...w32(sz),...w16(name.length),...w16(0)]);
     parts.push(head,name,f.data);
-    central.push(new Uint8Array([80,75,1,2, ...w16(20),...w16(20),...w16(0),...w16(0),...w16(0),...w16(0),
+    central.push(new Uint8Array([80,75,1,2, ...w16(20),...w16(20),...w16(0x0800),...w16(0),...w16(0),...w16(0),
       ...w32(crc),...w32(sz),...w32(sz),...w16(name.length),...w16(0),...w16(0),...w16(0),...w16(0),...w32(0),...w32(off)]),name);
     off+=head.length+name.length+sz;
   }
