@@ -149,7 +149,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
       </ul>
       <b>手動微調（自動之後接手）</b>：
       <ul>
-        <li>點幀 → <kbd>←→↑↓</kbd> 平移對位（<kbd>Shift</kbd>＝4 格），「重設位移」歸零，「洋蔥皮」看前一幀鬼影。<b>幀列有兩列工作列</b>：任何幀（來源或動畫）都能拖到任一列、自己決定上下怎麼分組（例如第一列走路、第二列攻擊，或兩個來源各一列）；列內直接拖曳＝重排（同一動作內；放到目標左半＝插前面、右半＝插後面），拖到列的空白處＝移到該列最後。新匯入的來源與新產生的動畫幀會落在「目前選中幀」的那一列。預覽<b>滾輪＝縮放</b>（往自己方向滾＝放大、反方向＝縮小，以游標為中心，左側縮放滑桿同步連動）；放大超出框時，框內<b>按住左鍵拖曳＝平移</b>（編輯模式中改用中鍵拖曳）。</li>
+        <li>點幀 → <kbd>←→↑↓</kbd> 平移對位（<kbd>Shift</kbd>＝4 格），「重設位移」歸零，「洋蔥皮」看前一幀鬼影。<b>幀列有兩列工作列</b>：任何幀（來源或動畫）都能拖到任一列、自己決定上下怎麼分組（例如第一列走路、第二列攻擊，或兩個來源各一列）；列內直接拖曳＝重排（同一動作內；放到目標左半＝插前面、右半＝插後面），拖到列的空白處＝移到該列最後。新匯入的來源與新產生的動畫幀會落在「目前選中幀」的那一列。預覽<b>滾輪＝縮放</b>（往自己方向滾＝放大、反方向＝縮小，以游標為中心，左側縮放滑桿同步連動）；放大超出框時，框內<b>按住左鍵拖曳＝平移</b>（編輯模式中改用中鍵拖曳）。透明棋格底可切換：預覽列「<b>淺色棋格</b>」勾選＝白灰底（深色物件較清楚、較不傷眼），不勾＝深灰底（亮物件好辨識）；偏好會記住。</li>
         <li>「<b>編輯像素</b>」工具列：變成<b>浮動視窗</b>，抓左邊「⠿ 工具」握把就能用滑鼠拖到任意位置（位置會記住）。筆（可調粗 1～3、右鍵隨時＝擦）、橡皮擦、<b>填色</b>（按住左鍵可一路整片抹）、<b>指抹</b>（按住左鍵像手指把顏色抹開，經過的色被帶著走）、直線（拖曳預覽）、吸色（取完自動回筆）、<b>變形</b>（拖框圈選區域 → 左鍵拖動搬移、<kbd>Ctrl</kbd>+左鍵拖＝複製副本；<b>右鍵按住拖＝自由旋轉</b>選區、右鍵點一下＝取消選區；翻轉鈕只翻選區；輸入 1～364 度後 <b>↻↺</b> 照該角度順／逆時針轉選區內容；<kbd>Esc</kbd> 也＝取消選區）、<b>↶復原/↷重做</b>（Ctrl+Z / Ctrl+Y，一次筆劃或搬移＝一條）、左右/上下翻轉（沒有選區＝整幀）、清空（皆可復原）。</li>
         <li>「<b>複製此幀</b>」把選中的幀（連復原紀錄）複製一份插在後面——拿它當底改出細節不同的新幀很好用；同動作重新產生不會取代複製幀，匯出檔名會帶 <code>c</code>。「刪除此幀」、重新產生都會保留同動作其他幀（重新產生只取代同動作）。</li>
       </ul>
@@ -215,6 +215,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
       <label class="note">縮放 <input type="range" id="zoom" min="2" max="16" step="1" value="8" style="width:90px"><span class="val" id="zoomV">8x</span></label>
       <label class="note"><input type="checkbox" id="grid" checked> 格線</label>
       <label class="note"><input type="checkbox" id="onion" checked> 洋蔥皮</label>
+      <label class="note" title="透明棋格底顏色：預設深灰（亮物件好辨識）；勾選＝白灰（深色物件較清楚、較不傷眼）"><input type="checkbox" id="lightCheck"> 淺色棋格</label>
     </h2>
     <div id="outWrap"></div>
     <div class="foot" id="outInfo">-</div>
@@ -380,7 +381,7 @@ const P = {
   adj: { b:0, c:0, s:0 },
   q:   { on:true, k:16, locked:false, colors:[] },
   cl:  { despeckle:1, outline:false, oc:[20,20,32] },
-  vw:  { zoom:8, grid:true, onion:true },
+  vw:  { zoom:8, grid:true, onion:true, light:false },   // light＝透明棋格底用白灰（深色物件較清楚）
   exp: { prefix:'sprite', scale:1 },
 };
 const cache = new Map();          // 幀索引 → 處理結果 {w,h,px}
@@ -809,8 +810,10 @@ function processFrame(fi){
 
 /* ============ 繪製 ============ */
 function drawChecker(ctx,w,h){
-  ctx.fillStyle='#22262e'; ctx.fillRect(0,0,w,h);
-  ctx.fillStyle='#2a2e37';
+  // 透明棋格底：預設深灰（適合亮物件）；P.vw.light＝白灰（適合深色物件，較不傷眼）
+  const light=P.vw&&P.vw.light;
+  ctx.fillStyle=light?'#f5f6f8':'#22262e'; ctx.fillRect(0,0,w,h);
+  ctx.fillStyle=light?'#d7dbe2':'#2a2e37';
   for(let y=0;y<h;y+=12)for(let x=((y/12)%2)*12;x<w;x+=24) ctx.fillRect(x,y,12,12);
 }
 function imgToCanvas(img,zoom){
@@ -1353,7 +1356,8 @@ function applyBind(){
   P.adj={b:+$('adjB').value,c:+$('adjC').value,s:+$('adjS').value};
   P.q.on=$('qOn').checked; P.q.k=+$('qK').value; P.q.locked=$('qLock').checked;
   P.cl.despeckle=+$('despeckle').value; P.cl.outline=$('outline').checked; P.cl.oc=hexRGB($('outColor').value);
-  P.vw.zoom=+$('zoom').value; P.vw.grid=$('grid').checked; P.vw.onion=$('onion').checked;
+  P.vw.zoom=+$('zoom').value; P.vw.grid=$('grid').checked; P.vw.onion=$('onion').checked; P.vw.light=$('lightCheck').checked;
+  try{ localStorage.setItem(LIGHT_KEY,P.vw.light?'1':'0'); }catch(e){}
   P.exp.prefix=$('prefix').value.trim()||'sprite'; P.exp.scale=+$('expScale').value;
   $('zoomV').textContent=P.vw.zoom+'x'; $('tolV').textContent=P.bg.tol; $('qKV').textContent=P.q.k;
   $('adjBV').textContent=P.adj.b; $('adjCV').textContent=P.adj.c; $('adjSV').textContent=P.adj.s;
@@ -1365,7 +1369,7 @@ $('outW').oninput=applyBind;
 $('qOn').onchange=$('qK').oninput=$('qLock').onchange=()=>{ if(!$('qLock').checked) P.q.colors=[]; applyBind(); };
 $('adjB').oninput=$('adjC').oninput=$('adjS').oninput=applyBind;
 bindRange('tol','tol','tolV'); bindRange('qK','k','qKV'); bindRange('zoom','zoom','zoomV');
-$('grid').onchange=$('onion').onchange=$('outline').onchange=applyBind;
+$('grid').onchange=$('onion').onchange=$('lightCheck').onchange=$('outline').onchange=applyBind;
 $('outColor').oninput=()=>{ $('outSw').style.background=$('outColor').value; applyBind(); };
 $('keyColor').oninput=()=>{ P.bg.color=hexRGB($('keyColor').value); $('keySw').style.background=$('keyColor').value; applyBind(); };
 $('tol').oninput=applyBind;
@@ -1754,11 +1758,12 @@ function syncUI(){  // 還原 P → 面板控制項（與 applyBind 反向）
   $('despeckle').value=P.cl.despeckle; $('outline').checked=!!P.cl.outline;
   $('outColor').value=hexOf(...P.cl.oc); $('outSw').style.background=$('outColor').value;
   $('zoom').value=P.vw.zoom; $('zoomV').textContent=P.vw.zoom+'x';
-  $('grid').checked=!!P.vw.grid; $('onion').checked=!!P.vw.onion;
+  $('grid').checked=!!P.vw.grid; $('onion').checked=!!P.vw.onion; $('lightCheck').checked=!!P.vw.light;
   $('prefix').value=P.exp.prefix; $('expScale').value=P.exp.scale;
   renderPalette();
 }
 const AUTO_KEY='img2pixel_auto';
+const LIGHT_KEY='img2pixel_lightbg';   // 淺色棋格偏好（跨專案記住）
 let autoTimer=0, saveFailNoted=false;
 function scheduleSave(){ if(!$('autosave').checked) return;
   clearTimeout(autoTimer); autoTimer=setTimeout(doAutoSave,1200); }
@@ -1979,6 +1984,7 @@ function makeDemo(){
 
 /* ============ 啟動 ============ */
 (function boot(){
+  try{ if(localStorage.getItem(LIGHT_KEY)==='1') $('lightCheck').checked=true; }catch(e){}   // 記住的棋格底色偏好
   applyBind();
   syncAnimOpts();
   $('btnHelp').onclick=()=>$('helpBox').classList.remove('hidden');
