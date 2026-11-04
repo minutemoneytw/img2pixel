@@ -141,7 +141,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
       <ul>
         <li>下面幀列點選一張<b>來源幀</b>（PNG/截圖那種）→ 右側「動作」選<b>靜物/走路/飛行/攻擊/待機</b> → 按「<b>產生動畫</b>」。同一動作再按一次＝改參數重新產生。</li>
         <li><b>靜物＝只出像素圖 1 張</b>（家具、物件、植物用），動畫參數會自動停用。</li>
-        <li>走路/飛行/攻擊/待機參數：彈跳／腿步（<b>飛行＝撲翼</b>幅度）／前傾 幅度、<b>面向（右/左）</b>、攻擊刀光開關。預設值通常直接可用。</li>
+        <li>走路/飛行/攻擊/待機參數：彈跳／腿步（<b>飛行＝撲翼</b>幅度）／前傾 幅度、<b>翼模糊</b>（飛行專用，撲翼殘影的速度差越大殘影越長；0＝關）、<b>面向（右/左）</b>、攻擊刀光開關。預設值通常直接可用。</li>
         <li>匯出單一動作：點該動作任一幀 → 「水平 sprite sheet」或「ZIP」，檔名自動帶 <code>_still</code>/<code>_walk</code>/<code>_fly</code>/<code>_atk</code>/<code>_idle</code>。</li>
         <li>示範模式載入後會直接生出走路＋攻擊，先看效果再照做。</li>
         <li><b>看動畫效果</b>：點該動作任一幀 → 預覽區「<b>播放</b>」鍵（或按 <kbd>空白鍵</kbd>）循環播放，速度 6～12 fps 可選；「停止」或再按一次離開。</li>
@@ -298,11 +298,12 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
         </div>
         <div class="row"><label>彈跳</label><input type="range" id="animBob" min="0" max="3" value="1"><span class="val" id="animBobV">1</span></div>
         <div class="row"><label>腿步／<span title="飛行＝上方翼帶撲動幅度">撲翼</span></label><input type="range" id="animSwing" min="0" max="3" value="1"><span class="val" id="animSwingV">1</span></div>
+        <div class="row"><label><span title="飛行＝撲翼時自翼尖長出漸弱的同色殘影（模擬指抹動態模糊），0＝關">翼模糊</span></label><input type="range" id="animBlur" min="0" max="3" value="2"><span class="val" id="animBlurV">2</span></div>
         <div class="row"><label>前傾</label><input type="range" id="animLean" min="0" max="3" value="1"><span class="val" id="animLeanV">1</span>
           <label><input type="checkbox" id="animSlash" checked> 攻擊刀光</label></div>
         <div class="row"><button id="btnGen" class="pri">產生動畫</button></div>
         <div class="note">以目前選中的<b>來源幀</b>像素化結果為基準（會自動鎖定調色盤）。同動作再按一次＝重新產生取代舊幀。<br>
-          <b>飛行</b>＝懸浮撲翼（翼帶上下撲＋下壓時身體上浮），適合龍／鳥等會飛的生物。<br>
+          <b>飛行</b>＝懸浮撲翼（翼帶上下撲＋下壓時身體上浮）＋<b>翼模糊</b>（撲翼殘影，模擬指抹動態模糊；速度差非零那幀長出），適合龍／鳥等會飛的生物。<br>
           匯出單一動作：點選該動作的任一幀，再按「水平 sprite sheet」或「ZIP」。</div>
       </section>
     </div>
@@ -662,15 +663,49 @@ function genAtk(base,n,prm){
   });
   return out;
 }
+// 翼膀動態殘影（模擬「指抹」）：沿秒動方向掃過左右翼，有色像素把同色往帶內「磨」出 length px 的漸弱殘影
+// dir=+1 由上往下（翼往下的那幀）、-1 由下往上；mix＝擦入混合率、fade＝殘影每 px 衰減；身體中央 14% 不抹（分左右翼）
+function wingSmudge(img,y0,y1,dir,len,mix,fade){
+  if(!dir||!len) return;
+  const W=img.w, cx=W/2, keep=W*0.14;
+  for(let x=0;x<W;x++){
+    if(Math.abs(x+0.5-cx)<=keep) continue;
+    const step=dir>0?1:-1, yA=dir>0?y0:y1-1, yB=dir>0?y1:y0-1;
+    let cr=0,cg=0,cb=0,ca=0,left=0,has=false;
+    for(let y=yA; step>0? y<yB : y>=yB; y+=step){
+      const i=(y*W+x)*4;
+      if(img.px[i+3]>0){
+        if(has&&mix>0){                                   // 已有殘影中：擦入前一色的混合
+          img.px[i]  =img.px[i]  *(1-mix)+cr*mix;
+          img.px[i+1]=img.px[i+1]*(1-mix)+cg*mix;
+          img.px[i+2]=img.px[i+2]*(1-mix)+cb*mix;
+        }
+        cr=img.px[i];cg=img.px[i+1];cb=img.px[i+2];ca=255;left=len;has=true;
+      }else if(has&&left>0){                              // 空白處：磨出漸弱殘影
+        img.px[i]=cr;img.px[i+1]=cg;img.px[i+2]=cb;img.px[i+3]=Math.round(ca);
+        ca*=fade; left--; if(ca<25) has=false;
+      }
+    }
+  }
+}
 // 飛行：懸浮撲翼——上方 42% 當翼帶上下撲動，撲翅下壓那幀身體上浮＋面向側輕前傾；不出腿部步態
+// 翼模糊（prm.blur）：撲翼有速度差的那幀，自翼尖長出漸弱同色殘影（wingSmudge）＝動態模糊
 function genFly(base,n,prm){
   const wingCut=Math.round(base.h*0.42), bodyTop=Math.round(base.h*0.6), f=prm.face||1, out=[];
   const wing=[-1,0,1,0], rise=[0,0,1,0];   // 4 幀一循環：翼上撲→中→下壓→中；下壓時身體上浮
+  const blur=prm.blur||0;
   for(let i=0;i<n;i++){
     const k=i%4, img=copyImg(base);
     moveRect(img,0,img.w,0,wingCut,0,wing[k]*prm.swing);        // 翼帶撲動
     if(rise[k]) moveRect(img,0,img.w,0,img.h,0,-prm.bob);       // 下壓＝身體上浮
     if(wing[k]>0) shearTop(img,bodyTop,Math.round(f*prm.lean*0.5)); // 下壓幀帶一點前傾
+    if(blur){                                                   // 速度差非零那幀→翼殘影
+      const vel=wing[k]-wing[(k+3)%4];
+      if(vel){
+        const len=Math.min(12, 3+blur*2+Math.abs(vel)*prm.swing*2);
+        wingSmudge(img,0,Math.min(img.h,wingCut+Math.round(base.h*0.12)),vel>0?1:-1,len,Math.min(0.6,0.15*blur),0.62);
+      }
+    }
     out.push(img);
   }
   return out;
@@ -692,7 +727,7 @@ function generateAnim(){
   if(!f||!f.img) return toast('請先在下面幀列點選一張「來源幀」（不是產生出來的動畫幀）');
   if(P.q.on){ P.q.locked=true; $('qLock').checked=true; } // 自動鎖定，幀間色彩才一致
   const face=+$('animFace').value;
-  const prm={bob:+$('animBob').value,swing:+$('animSwing').value,lean:+$('animLean').value,slash:$('animSlash').checked,face};
+  const prm={bob:+$('animBob').value,swing:+$('animSwing').value,lean:+$('animLean').value,blur:+$('animBlur').value,slash:$('animSlash').checked,face};
   for(let i=P.frames.length-1;i>=0;i--) if(P.frames[i].meta&&!P.frames[i].meta.copy&&P.frames[i].meta.action===act) P.frames.splice(i,1);   // 複製幀（copy）不被重新產生取代
   const base=copyImg(processFrame(P.sel));
   const gen= act==='still'?[base] : act==='walk'?genWalk(base,n,prm) : act==='fly'?genFly(base,n,prm) : act==='atk'?genAtk(base,n,prm) : genIdle(base,n,prm);
@@ -708,8 +743,9 @@ function generateAnim(){
 }
 // 靜物模式：停用動畫參數，按鈕文字改為單張
 function syncAnimOpts(){
-  const still=$('animAct').value==='still';
-  ['animN','animFace','animBob','animSwing','animLean','animSlash'].forEach(id=>$(id).disabled=still);
+  const still=$('animAct').value==='still', flyOn=$('animAct').value==='fly';
+  ['animN','animFace','animBob','animSwing','animBlur','animLean','animSlash'].forEach(id=>$(id).disabled=still);
+  $('animBlur').disabled= still || !flyOn;   // 翼模糊只在飛行有意義
   $('btnGen').textContent= still?'產生（靜物像素圖 1 張）':'產生動畫';
 }
 // 整條管線：幀 → 輸出像素；已烘焙的動畫幀直接回傳（套用位移）
@@ -1363,7 +1399,7 @@ $('animAct').onchange=()=>{ // 幀數選項依動作調整
   $('animN').innerHTML=map[$('animAct').value].map(v=>`<option value="${v}"${v===old?' selected':''}>${v}</option>`).join('');
   syncAnimOpts();
 };
-['animBob','animSwing','animLean'].forEach(id=>$(id).oninput=e=>{$(id+'V').textContent=e.target.value;});
+['animBob','animSwing','animBlur','animLean'].forEach(id=>$(id).oninput=e=>{$(id+'V').textContent=e.target.value;});
 $('btnGen').onclick=()=>{ if(S_play.on) playStop(); generateAnim(); };
 /* 播放 */
 $('btnPlay').onclick=()=> S_play.on?playStop():playStart();
