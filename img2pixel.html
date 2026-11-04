@@ -142,6 +142,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
       <b>常見問題</b>：
       <ul>
         <li>背景去不掉 → 容許差調大，或先改用「全域色鍵」（但角色身上有同色就會破洞，改回泛洪）。</li>
+        <li><b>生成動畫才發現忘了去背</b> → 調好鍵色／容許差後，點該動作任一幀，按去背區的「<b>補去背</b>」——會把去背直接套到整組動畫幀的像素上（可復原）。</li>
         <li>角色邊緣破洞/缺塊 → 背景跟角色同色被誤去；把裁切框縮緊一點只留角色四周。</li>
         <li>成品糊糊的 → 取樣改成「最多色」、色數調低一點、或輸出格數加大。</li>
         <li>走路幀看起來沒動 → 彈跳/腿步被調成 0 了；或兩幀放得太近。</li>
@@ -213,6 +214,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
             <option value="global">全域色鍵</option>
           </select>
           <button id="btnCorner" title="取四角平均色當鍵色">取角落色</button>
+          <button id="btnBakeBG" title="把目前的去背設定直接套到選中幀的像素上：點動畫幀＝同動作整組一起套（可復原）。生成動畫前忘了去背時，用這顆補救">補去背</button>
         </div>
         <div class="row"><label>鍵色</label><span class="sw" id="keySw" style="background:#262b33"><input type="color" id="keyColor" value="#262b33"></span>
           <label>容許差 <input type="range" id="tol" min="0" max="120" value="32"><span class="val" id="tolV">32</span></label>
@@ -390,11 +392,11 @@ function outH(f){ const c=f.crop; return Math.max(1, Math.round(P.out.w * c.h / 
 
 /* ============ 管線各步驟 ============ */
 // 去背：global＝全部近鍵色都透明；flood＝從邊緣 BFS 相連的近鍵色
-function removeBG(d){
+// 直接吃 RGBA 像素陣列（管線的 ImageData 與烘焙幀的 px 都能用）
+function removeBG(px,W,H){
   if(P.bg.mode==='none') return;
   const [kr,kg,kb]=P.bg.color, tol=P.bg.tol, tol2=tol*tol*3;
-  const near = i => { const dr=d.data[i]-kr, dg=d.data[i+1]-kg, db=d.data[i+2]-kb; return dr*dr+dg*dg+db*db<=tol2; };
-  const W=d.width, H=d.height, px=d.data;
+  const near = i => { const dr=px[i]-kr, dg=px[i+1]-kg, db=px[i+2]-kb; return dr*dr+dg*dg+db*db<=tol2; };
   if(P.bg.mode==='global'){
     for(let i=0;i<px.length;i+=4) if(px[i+3]>0 && near(i)) px[i+3]=0;
     return;
@@ -711,7 +713,7 @@ function processFrame(fi){
   const ctx=c.getContext('2d',{willReadFrequently:true});
   ctx.drawImage(f.img, f.crop.x,f.crop.y,f.crop.w,f.crop.h, 0,0,f.crop.w,f.crop.h);
   const d=ctx.getImageData(0,0,c.width,c.height);
-  removeBG(d); adjust(d);
+  removeBG(d.data,c.width,c.height); adjust(d);
   const oh=outH(f);
   const img=downscale(d,P.out.w,oh);
   despeckle(img,P.cl.despeckle);
@@ -1287,12 +1289,26 @@ $('tol').oninput=applyBind;
 $('btnPick').onclick=()=>{ P._pick=!P._pick; $('btnPick').classList.toggle('on',P._pick);
   if(P._pick) toast('滴管模式：點左邊來源圖取色'); };
 $('btnCorner').onclick=()=>{ const f=cur(); if(!f) return;
+  if(!f.img) return toast('動畫幀沒有來源圖——請選「來源幀」，或直接在鍵色色塊設色');
   const c=document.createElement('canvas'); c.width=2;c.height=2;
   const ctx=c.getContext('2d'); ctx.drawImage(f.img,0,0,2,2);
   const d=ctx.getImageData(0,0,2,2).data;
   const avg=[0,1,2].map(ch=>(d[ch]+d[4+ch]+d[8+ch]+d[12+ch])/4);
   P.bg.color=avg; $('keyColor').value=hexOf(...avg); $('keySw').style.background=hexOf(...avg);
   applyBind(); toast('以四角平均色當鍵色'); };
+// 補去背：把目前的去背設定直接套到選中幀的「烘焙像素」上——生成動畫前忘了去背的補救。
+// 點的是動畫幀＝同動作整組一起套（含複製幀），背景去除才會一致；一次套用＝一條復原紀錄
+$('btnBakeBG').onclick=()=>{ const f=cur(); if(!f) return;
+  if(!f.baked) return toast('這是來源幀——直接改上面的去背設定就會重跑管線，不用這顆');
+  if(P.bg.mode==='none') return toast('去背模式是「不去背」——先選「邊緣泛洪」或「全域色鍵」');
+  const targets=(f.meta&&f.meta.action)
+    ? P.frames.filter(x=>x.baked&&x.meta&&x.meta.action===f.meta.action)
+    : [f];
+  targets.forEach(x=>{ ensureHist(x); removeBG(x.baked.px,x.baked.w,x.baked.h); pushState(x); });
+  invalidate(); renderAll(); syncHistBtns();
+  toast(f.meta&&f.meta.action
+    ? `已對「${ACT_NAME[f.meta.action]}」全部 ${targets.length} 幀套用去背（可復原）`
+    : '已對此幀套用去背（可復原）'); };
 $('btnCropAll').onclick=()=>{ const f=cur(); if(!f) return;
   if(!f.img) return toast('動畫幀沒有裁切——請選「來源幀」再套用');
   P.frames.forEach(x=>{ if(!x.img) return; x.crop={...f.crop}; x.dx=0; x.dy=0; }); invalidate(); renderAll(); toast('裁切已套用到全部來源幀'); };
