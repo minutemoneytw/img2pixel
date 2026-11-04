@@ -667,7 +667,7 @@ function generateAnim(){
   const act=$('animAct').value, f=cur();
   let n=+$('animN').value;                       // select 直改 value 可能為空——退回預設
   if(!n) n= act==='atk'?3: act==='idle'?2:4;
-  if(!f||f.baked) return toast('請先在下面幀列點選一張「來源幀」（不是產生出來的動畫幀）');
+  if(!f||!f.img) return toast('請先在下面幀列點選一張「來源幀」（不是產生出來的動畫幀）');
   if(P.q.on){ P.q.locked=true; $('qLock').checked=true; } // 自動鎖定，幀間色彩才一致
   const face=+$('animFace').value;
   const prm={bob:+$('animBob').value,swing:+$('animSwing').value,lean:+$('animLean').value,slash:$('animSlash').checked,face};
@@ -1109,7 +1109,7 @@ function renderSource(){
   const wrap=$('srcView'); wrap.innerHTML='';
   const f=cur(); $('srcIdx').textContent=P.frames.length?P.sel+1:'-';
   if(!f){ wrap.innerHTML='<span class="note">把圖拖進來、貼上，或按「開檔加入」</span>'; $('cropInfo').textContent='-'; return; }
-  if(f.baked){ wrap.innerHTML='<span class="note">這是產生的動畫幀——像素已固定。<br>要調整請選回「來源幀」改設定後重新產生，<br>或用右上「編輯像素」直接修這一幀。</span>'; $('cropInfo').textContent='-'; return; }
+  if(f.baked&&!f.img){ wrap.innerHTML='<span class="note">這是產生的動畫幀——像素已固定。<br>要調整請選回「來源幀」改設定後重新產生，<br>或用右上「編輯像素」直接修這一幀。</span>'; $('cropInfo').textContent='-'; return; }
   const im=f.img, dispW=Math.min(560,im.width), s=dispW/im.width, dispH=Math.round(im.height*s);
   const c=document.createElement('canvas'); c.width=dispW; c.height=dispH; c.dataset.scale=s;
   const ctx=c.getContext('2d'); ctx.imageSmoothingEnabled=true; ctx.drawImage(im,0,0,dispW,dispH);
@@ -1256,7 +1256,7 @@ const recomputeAll=debounce(()=>{ P.frames.forEach((_,i)=>processFrame(i)); proc
 function scheduleCompute(){ if(P.frames.length) recomputeAll(); }
 function renderAll(){ renderSource(); renderPreview(); renderStrip(); renderPalette();
   const f=cur();
-  $('outHV').textContent=(f&&f.crop&&!f.baked)?outH(f):'?';
+  $('outHV').textContent=(f&&f.crop&&f.img)?outH(f):'?';
   scheduleSave(); }
 
 /* ============ 控制綁定 ============ */
@@ -1294,10 +1294,10 @@ $('btnCorner').onclick=()=>{ const f=cur(); if(!f) return;
   P.bg.color=avg; $('keyColor').value=hexOf(...avg); $('keySw').style.background=hexOf(...avg);
   applyBind(); toast('以四角平均色當鍵色'); };
 $('btnCropAll').onclick=()=>{ const f=cur(); if(!f) return;
-  if(f.baked) return toast('動畫幀沒有裁切——請選「來源幀」再套用');
-  P.frames.forEach(x=>{ if(x.baked) return; x.crop={...f.crop}; x.dx=0; x.dy=0; }); invalidate(); renderAll(); toast('裁切已套用到全部來源幀'); };
+  if(!f.img) return toast('動畫幀沒有裁切——請選「來源幀」再套用');
+  P.frames.forEach(x=>{ if(!x.img) return; x.crop={...f.crop}; x.dx=0; x.dy=0; }); invalidate(); renderAll(); toast('裁切已套用到全部來源幀'); };
 $('btnCropReset').onclick=()=>{ const f=cur(); if(!f) return;
-  if(f.baked) return toast('動畫幀沒有裁切——請選「來源幀」再操作');
+  if(!f.img) return toast('動畫幀沒有裁切——請選「來源幀」再操作');
   f.crop={x:0,y:0,w:f.img.width,h:f.img.height}; invalidate(); renderAll(); };
 $('btnPalAdd').onclick=()=>{ P.q.colors.push([136,136,136]); if(!P.q.locked)$('qLock').checked=true,P.q.locked=true;
   renderPalette(); invalidate(); scheduleCompute(); };
@@ -1314,7 +1314,8 @@ $('btnDel').onclick=()=>{ if(!P.frames.length)return; P.frames.splice(P.sel,1);
 $('btnNudgeR').onclick=()=>{ const f=cur(); if(!f)return; f.dx=f.dy=0; invalidate(); renderAll(); };
 $('btnCopy').onclick=()=>{ const f=cur(); if(!f) return;
   const c={ name:f.name+'複', dx:f.dx, dy:f.dy, lane:f.lane||0, meta:f.meta?{...f.meta,copy:true}:undefined };
-  if(f.baked) c.baked=copyImg(f.baked); else { c.img=f.img; c.crop={...f.crop}; }
+  if(f.img){ c.img=f.img; c.crop={...f.crop}; if(f.baked) c.baked=copyImg(f.baked); }   // 修過的來源幀：來源圖＋烘焙像素都帶走
+  else c.baked=copyImg(f.baked);
   if(f.hist) c.hist={arr:f.hist.arr.map(copyImg),i:f.hist.i};   // 復原紀錄也一起帶走
   P.frames.splice(P.sel+1,0,c); P.sel++; invalidate(); renderAll();
   toast('已複製此幀（插在後面）——可直接編輯／變形；同動作重新產生不會取代它'); };
@@ -1604,9 +1605,9 @@ function projectJSON(opt){
     settings:{ bg:P.bg, out:P.out, adj:P.adj,
       q:{on:P.q.on,k:P.q.k,locked:P.q.locked,colors:P.q.colors}, cl:P.cl, vw:P.vw, exp:P.exp },
     frames:P.frames.map(f=>{
-      const o={ t:f.baked?'baked':'src', name:f.name, dx:f.dx, dy:f.dy, lane:f.lane||0, meta:f.meta||null };
-      if(f.baked){ o.w=f.baked.w; o.h=f.baked.h; o.px=pxB64(f.baked.px); }
-      else{ const d=imgDataURL(f.img,opt&&opt.maxImg); o.src=d.url;
+      const o={ t:f.img?'src':'baked', name:f.name, dx:f.dx, dy:f.dy, lane:f.lane||0, meta:f.meta||null };
+      if(f.baked){ o.w=f.baked.w; o.h=f.baked.h; o.px=pxB64(f.baked.px); }   // 修過的來源幀：烘焙像素與來源圖都存
+      if(f.img){ const d=imgDataURL(f.img,opt&&opt.maxImg); o.src=d.url;
         o.crop={x:Math.round(f.crop.x*d.s),y:Math.round(f.crop.y*d.s),w:Math.round(f.crop.w*d.s),h:Math.round(f.crop.h*d.s)}; }
       if(f.hist&&!(opt&&opt.noHist)) o.hist={arr:f.hist.arr.map(h=>pxB64(h.px)), i:f.hist.i};
       return o;
@@ -1624,19 +1625,18 @@ async function loadProject(text){
   const frames=[];
   for(const o of j.frames){
     if(!o||!o.t) continue;
-    if(o.t==='baked'){
-      if(!o.px||!o.w) continue;
-      const fr={baked:{w:o.w,h:o.h,px:b64Px(o.px)}, name:o.name||'幀', dx:o.dx||0, dy:o.dy||0, lane:o.lane||0};
-      if(o.meta) fr.meta=o.meta;
-      if(o.hist&&o.hist.arr) fr.hist={arr:o.hist.arr.map(b=>({w:o.w,h:o.h,px:b64Px(b)})), i:o.hist.i|0};
-      frames.push(fr);
-    }else{
-      if(!o.src) continue;
+    const fr={ name:o.name||'幀', dx:o.dx||0, dy:o.dy||0, lane:o.lane||0 };
+    if(o.meta) fr.meta=o.meta;
+    if(o.px&&o.w) fr.baked={w:o.w,h:o.h,px:b64Px(o.px)};          // 修過的來源幀會同時帶 src＋烘焙像素
+    if(o.src){
       const im=new Image();
       await new Promise(res=>{ im.onload=res; im.onerror=()=>{ toast('專案內有圖讀失敗：'+(o.name||'')); res(); }; im.src=o.src; });
-      if(!im.width) continue;
-      frames.push({img:im, name:o.name||'來源', crop:o.crop||{x:0,y:0,w:im.width,h:im.height}, dx:o.dx||0, dy:o.dy||0, lane:o.lane||0, meta:o.meta||undefined});
+      if(!im.width){ if(!fr.baked) continue; }
+      else{ fr.img=im; fr.crop=o.crop||{x:0,y:0,w:im.width,h:im.height}; }
     }
+    if(!fr.img&&!fr.baked) continue;
+    if(o.hist&&o.hist.arr&&fr.baked) fr.hist={arr:o.hist.arr.map(b=>({w:o.w,h:o.h,px:b64Px(b)})), i:o.hist.i|0};
+    frames.push(fr);
   }
   P.frames=frames; P.sel=clamp(j.sel|0,0,Math.max(0,frames.length-1));
   syncUI(); invalidate(); renderAll();
