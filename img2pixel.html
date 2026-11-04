@@ -28,7 +28,15 @@ button.pri{background:var(--gold);border-color:var(--gold);color:#16130a;font-we
 button.pri:hover{filter:brightness(1.1);color:#16130a}
 button.on{border-color:var(--accent);color:var(--accent)}
 button:disabled{opacity:.4;cursor:default}
-main{flex:1;display:grid;grid-template-columns:minmax(300px,1fr) minmax(300px,1fr) 320px;gap:10px;padding:10px;min-height:0}
+main{flex:1;display:grid;grid-template-columns:minmax(300px,1fr) 10px minmax(300px,1fr) 10px 320px;gap:0;padding:10px;min-height:0}
+/* 可拖曳分隔條：調整各工作區大小 */
+.spl{position:relative;z-index:2;flex:0 0 auto;touch-action:none;user-select:none}
+.spl-v{width:10px;cursor:col-resize}
+.spl-h{height:8px;cursor:row-resize}
+.spl::after{content:'';position:absolute;background:var(--line);border-radius:2px;transition:background .15s}
+.spl-v::after{left:3px;right:3px;top:30%;bottom:30%}
+.spl-h::after{top:2px;bottom:2px;left:35%;right:35%}
+.spl:hover::after,.spl.drag::after{background:var(--accent)}
 .pane{background:var(--panel);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .pane h2{margin:0;padding:7px 12px;font-size:12px;letter-spacing:2px;color:var(--gold);border-bottom:1px solid var(--line);background:rgba(0,0,0,.15);display:flex;align-items:center;gap:8px}
 .pane h2 .sp{flex:1}
@@ -94,7 +102,7 @@ footer{display:flex;gap:10px;padding:8px 10px;background:var(--panel);border-top
 #editBar select{padding:2px 4px}
 .hidden{display:none!important}
 kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:11px}
-@media(max-width:1100px){main{grid-template-columns:1fr 1fr}aside{grid-column:1/-1}}
+@media(max-width:1100px){main{grid-template-columns:1fr 1fr;gap:10px}aside{grid-column:1/-1}.spl{display:none}}
 </style>
 </head>
 <body>
@@ -124,6 +132,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
         <li><b>專案存檔</b>：「存專案」把全部幀＋設定存成 .json（完整畫質，之後「開專案」原樣載回）；右下「自動存檔」會在每次操作後約 1 秒存進瀏覽器本機（來源圖縮到 512px 省空間），下次開啟會問你要不要接著上次做。「清空」也會清掉自動存檔。</li>
         <li><b>匯入 sheet</b>：上方「匯入 sheet」把現成的水平 sprite sheet 切成一格格的幀——「格數」填幾張就自動算每格寬（高 &gt; 每格高 時會往下多列切）。切完就是一般來源幀，可繼續編輯／改色／重新匯出。</li>
       </ol>
+      <b>版面</b>：面板之間的<b>分隔條可以用滑鼠拖曳</b>——左右三欄的寬、幀列的高度、匯出面板的寬都能調，調好會記在瀏覽器本機，下次開啟照樣套用。
       <b>動畫（預設自動產生）／靜物</b>：
       <ul>
         <li>下面幀列點選一張<b>來源幀</b>（PNG/截圖那種）→ 右側「動作」選<b>靜物/走路/飛行/攻擊/待機</b> → 按「<b>產生動畫</b>」。同一動作再按一次＝改參數重新產生。</li>
@@ -171,6 +180,8 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
     </div>
   </div>
 
+  <div class="spl spl-v" data-k="0" title="拖曳調整來源／預覽面板寬度"></div>
+
   <div class="pane">
     <h2>像素預覽 <span class="sp"></span>
       <button id="btnPlay" title="循環播放目前動作的幀（空白鍵也可切換）">播放</button>
@@ -202,6 +213,8 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
     <div id="outWrap"></div>
     <div class="foot" id="outInfo">-</div>
   </div>
+
+  <div class="spl spl-v" data-k="1" title="拖曳調整預覽／控制面板寬度"></div>
 
   <aside class="pane">
     <div class="body">
@@ -292,6 +305,8 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
   </aside>
 </main>
 
+<div class="spl spl-h" title="拖曳調整幀列高度"></div>
+
 <footer>
   <div class="pane" id="stripPane">
     <h2>幀（點選後 <kbd>←→↑↓</kbd> 微調位置；<b>拖曳＝重排</b>，同動作內）<span class="sp"></span>
@@ -301,6 +316,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
     </h2>
     <div id="strip"></div>
   </div>
+  <div class="spl spl-v" data-k="exp" title="拖曳調整匯出面板寬度"></div>
   <div class="pane" id="exportPane">
     <div class="body">
       <h3>匯出（1x 真實像素）</h3>
@@ -1788,6 +1804,75 @@ function makeDemo(){
       im.src=URL.createObjectURL(b); },'image/png');
   });
 }
+
+/* ============ 可調式面板：拖曳分隔條改變各工作區大小 ============ */
+(function(){
+  const mainEl=document.querySelector('main'), footEl=document.querySelector('footer');
+  const MINP=260, MINEXP=220, MINFOOT=130;
+  const colsStr=c=>`${c[0]}px 10px ${c[1]}px 10px ${c[2]}px`;
+  const mainCols=()=>mainEl.style.gridTemplateColumns?mainEl.style.gridTemplateColumns.split(' ').filter((_,i)=>i%2===0).map(v=>parseFloat(v)):null;
+  // 第一次拖曳時把 main 的欄寬凍結成 px（之後拖曳只是改相鄰兩欄）
+  function freezeMain(){
+    const w=[...mainEl.children].filter(el=>el.classList.contains('pane')).map(p=>Math.round(p.getBoundingClientRect().width));
+    mainEl.style.gridTemplateColumns=colsStr(w);
+  }
+  function saveLayout(){
+    try{
+      const c=mainCols();
+      localStorage.setItem('i2p_layout',JSON.stringify({
+        c:c&&c.every(v=>v>=MINP)?c:null,
+        eh:footEl.style.height?parseFloat(footEl.style.height):null,
+        ew:parseFloat($('exportPane').style.width)||null }));
+    }catch(e){}
+  }
+  function restoreLayout(){
+    try{
+      const o=JSON.parse(localStorage.getItem('i2p_layout')||'null');
+      if(!o||window.innerWidth<=1100) return;
+      if(o.c) mainEl.style.gridTemplateColumns=colsStr(o.c);
+      if(o.eh>=MINFOOT) footEl.style.height=o.eh+'px';
+      if(o.ew>=MINEXP) $('exportPane').style.width=o.ew+'px';
+    }catch(e){}
+  }
+  let drag=null;
+  document.querySelectorAll('.spl').forEach(sp=>{
+    sp.addEventListener('pointerdown',e=>{
+      e.preventDefault();
+      const k=sp.dataset.k;
+      let snap;
+      if(k==='exp') snap={w0:$('exportPane').getBoundingClientRect().width};
+      else if(sp.classList.contains('spl-h')) snap={h0:footEl.getBoundingClientRect().height};
+      else{ freezeMain(); snap={c:mainCols(),i:k==='0'?0:1}; }
+      drag={sp,k,snap,x:e.clientX,y:e.clientY};
+      sp.classList.add('drag');
+      sp.setPointerCapture(e.pointerId);
+    });
+    sp.addEventListener('pointermove',e=>{
+      if(!drag||drag.sp!==sp) return;
+      const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+      if(drag.k==='exp'){
+        $('exportPane').style.width=Math.max(MINEXP,Math.min(640,drag.snap.w0-dx))+'px';
+      }else if(sp.classList.contains('spl-h')){
+        footEl.style.height=Math.max(MINFOOT,Math.min(window.innerHeight*.7,drag.snap.h0-dy))+'px';
+      }else{
+        const c=drag.snap.c.slice(), i=drag.snap.i;
+        let a=c[i]+dx, b=c[i+1]-dx;              // 往右拖＝左欄變寬、右欄變窄
+        if(a<MINP){ b-=(MINP-a); a=MINP; }
+        if(b<MINP){ a-=(MINP-b); b=MINP; }
+        if(a<MINP) a=MINP;
+        c[i]=Math.round(a); c[i+1]=Math.round(b);
+        mainEl.style.gridTemplateColumns=colsStr(c);
+      }
+    });
+    const up=()=>{ if(!drag||drag.sp!==sp) return; drag=null; sp.classList.remove('drag'); saveLayout(); };
+    sp.addEventListener('pointerup',up);
+    sp.addEventListener('pointercancel',up);
+  });
+  addEventListener('resize',()=>{ // 窗口變窄回到響應式布局時，清掉凍結的欄寬
+    if(window.innerWidth<=1100){ mainEl.style.gridTemplateColumns=''; footEl.style.height=''; }
+  });
+  restoreLayout();
+})();
 
 /* ============ 啟動 ============ */
 (function boot(){
