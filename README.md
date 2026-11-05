@@ -16,13 +16,18 @@
 
 ## 開始使用（Windows）
 
-**雙擊 `啟動工具.bat`**，它會在本機起一個小伺服器並開好瀏覽器（網址 `http://127.0.0.1:8799/img2pixel.html`）。用完把那個伺服器視窗關掉即可。
+**雙擊 `img2pixel.bat`**——它是**單一檔案**，內含整套工具（內嵌 `img2pixel.html`）與本機小伺服器：
+雙擊後自動起伺服器（純 Windows 內建 HttpListener，**不需要 Python**）並開好瀏覽器，網址 `http://localhost:8799/`（port 被占用時會自動換下一個）。用完把黑色視窗關掉即可。
 
 > **為什麼不要直接雙擊 `img2pixel.html`？**
 > 用檔案開啟（`file://`）時，Chromium 會把「下載」的檔案標記成 **ZoneId=4（限制的網站）**，Windows 預設**封鎖開啟／解壓縮**（會跳「Windows 已封鎖了對這個檔案的存取」）。
-> 走 `http://127.0.0.1` 開就只會被標成一般網際網路（ZoneId=3），**存檔、解壓都正常**。
+> 走 `http://localhost` 就只會被標成一般網際網路（ZoneId=3），**存檔、解壓都正常**。
 > 真的已經被檔案直接開過、做出被封鎖的檔案時：右鍵該檔／該 ZIP →「內容」→ 勾**「解除封鎖」**→ 確定（或 PowerShell `Get-ChildItem 資料夾 | Unblock-File`）。
 > macOS／Linux：在資料夾執行 `python3 -m http.server 8799`，再開 `http://127.0.0.1:8799/img2pixel.html`。
+
+### 給維護者
+
+`img2pixel.bat` 是從 `img2pixel.html` 產生的：改完 HTML 後執行 `build-standalone.ps1`（PowerShell）重新產生。HTML 直接雙擊仍然能完整使用，只是匯出檔案會被封鎖（如上）。
 
 ## 使用說明
 
