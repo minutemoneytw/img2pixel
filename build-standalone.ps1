@@ -1,31 +1,39 @@
 # ======================================================================
-# build-standalone.ps1 — 把整個工具包進單一 img2pixel.bat（自包含單檔）
+# build-standalone.ps1 - pack the whole tool into a single img2pixel.bat
+# ASCII only: Windows PowerShell 5.1 misreads no-BOM UTF-8 scripts as ANSI.
+# ======================================================================
+# How it works (why a .bat and not a plain .html):
+#   Double-clicking the .html (file://) marks every browser download as
+#   ZoneId=4 (restricted) and Windows blocks opening/unzipping it. A web
+#   page cannot start a local server by itself, so a launcher outside the
+#   browser is always required. This .bat embeds img2pixel.html in its
+#   tail (after "exit /b", so cmd never parses it) and on run:
+#     1. head (cmd) feeds the file to PowerShell which extracts and runs
+#        the embedded PowerShell section,
+#     2. PowerShell serves the page from memory with the built-in
+#        HttpListener (localhost only, no Python needed),
+#     3. opens the browser: downloads are then marked Zone 3 (normal),
+#        so saving / unzipping / opening exports all work.
 #
-# 為什麼要這樣：直接雙擊 .html（file://）時，瀏覽器下載的檔案會被
-# Windows 標記為 ZoneId=4（限制的網站）而封鎖開啟／解壓；網頁沙箱又
-# 無法自己啟動本機伺服器，所以一定要一個「瀏覽器之外的啟動器」。
-# 這個 .bat 把整個 img2pixel.html 內嵌在檔案後段，雙擊時：
-#   1. 前段 cmd 呼叫 PowerShell 讀取本檔、抽出後段程式並執行
-#   2. PowerShell 用內建 HttpListener 在記憶體裡直接服務頁面
-#      （不需要 Python ；只監聽 localhost）
-#   3. 自動開啟瀏覽器 → 下載標記為一般區域（ZoneId=3）→ 存檔正常
-#
-# 維護流程：改完 img2pixel.html 後執行本腳本重新產生 img2pixel.bat。
-# 注意：前段（cmd 可達的部分）必須保持純 ASCII；HTML 區塊位於
-#       「exit /b」之後，永遠不會被 cmd 剖析，可含任意字元。
+# Maintainer workflow: edit img2pixel.html, run this script to refresh
+# img2pixel.bat. (Keep the cmd-reachable head pure ASCII. The HTML block
+# sits after "exit /b" and can contain anything.)
 # ======================================================================
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $MyInvocation.MyCommand.Path
 $src=Join-Path $root 'img2pixel.html'
+$ico=Join-Path $root 'img2pixel.ico'
 $out=Join-Path $root 'img2pixel.bat'
-$nl=[char]13+[char]10   # CRLF：cmd 批次檔必需
+$nl=[char]13+[char]10   # CRLF: required by cmd batch files
 
-if(-not (Test-Path $src)){ throw "找不到 $src" }
-# 原始 html 必須是 UTF-8 無 BOM、CRLF 行尾（工具本體就是）
+if(-not (Test-Path $src)){ throw "source not found: $src" }
+if(-not (Test-Path $ico)){ throw "icon not found: $ico (generate with draw-ico.js first)" }
+# Tool page must be UTF-8 without BOM, CRLF endings (it already is).
 $html=[IO.File]::ReadAllText($src,[Text.UTF8Encoding]::new($false))
 
-# ---------- 前段：cmd 啟動器（純 ASCII） ----------
-# 標記字串用字串連接組出來，避免「第一次出現」被前段自己吃掉
+# ---------- head: cmd side (pure ASCII) ----------
+# Marker strings are built by concatenation so the FIRST occurrence of
+# each marker in the file is the real section, not the bootstrap code.
 $preLines=@(
   '@echo off',
   'title img2pixel - local server',
@@ -38,15 +46,17 @@ $preLines=@(
   'rem',
   'rem  Keep this window open while using the tool.',
   'rem  Close this window (or Ctrl+C) to stop the server.',
+  'rem  First run also creates a desktop shortcut with a pixel icon.',
   'rem ====================================================================',
-  'powershell -NoProfile -ExecutionPolicy Bypass -Command "$I2P_TXT=[IO.File]::ReadAllText(''%~f0'', [Text.UTF8Encoding]::new($false)); $i=$I2P_TXT.IndexOf(((''#I2P_PS_'')+(''START#''))); $j=$I2P_TXT.IndexOf(((''#I2P_PS_'')+(''END#''))); iex ($I2P_TXT.Substring($i+14, $j-$i-14))"',
+  'powershell -NoProfile -ExecutionPolicy Bypass -Command "$I2P_SELF=(''%~f0''); $I2P_TXT=[IO.File]::ReadAllText(''%~f0'', [Text.UTF8Encoding]::new($false)); $i=$I2P_TXT.IndexOf(((''#I2P_PS_'')+(''START#''))); $j=$I2P_TXT.IndexOf(((''#I2P_PS_'')+(''END#''))); iex ($I2P_TXT.Substring($i+14, $j-$i-14))"',
   'exit /b'
 )
 $pre=($preLines -join $nl)+$nl
 
-# ---------- 中段：PowerShell 伺服器（永遠不會被 cmd 執行） ----------
+# ---------- middle: PowerShell server (never parsed by cmd) ----------
 $psLines=@(
   '$ErrorActionPreference=''Stop''',
+  '@ICO@',
   '# ---- 1. pick a free port (starts at 8799) ----',
   '$port=8799',
   'while($port -lt 8930){',
@@ -64,6 +74,27 @@ $psLines=@(
   'try{ $h.Start() }catch{ Write-Host (''ERROR: cannot listen on port ''+$port+'' : ''+$_.Exception.Message); exit 1 }',
   '[IO.File]::WriteAllText((Join-Path $env:TEMP ''i2p_server.pid''), $PID)',
   '$url=(''http://localhost:''+$port+''/'')',
+  '# ---- 4. desktop shortcut with the pixel icon (created on first run) ----',
+  'try{',
+  '  $icoDir=Join-Path $env:LOCALAPPDATA ''img2pixel''',
+  '  if(!(Test-Path $icoDir)){ New-Item -ItemType Directory -Path $icoDir -Force | Out-Null }',
+  '  $icoPath=Join-Path $icoDir ''img2pixel.ico''',
+  '  try{ [IO.File]::WriteAllBytes($icoPath, [Convert]::FromBase64String($I2P_ICO_B64)) }catch{ }',
+  '  $lnkPath=Join-Path ([Environment]::GetFolderPath(''Desktop'')) ''img2pixel.lnk''',
+  '  $need=$true',
+  '  if(Test-Path $lnkPath){',
+  '    $old=(New-Object -ComObject WScript.Shell).CreateShortcut($lnkPath)',
+  '    if(($old.TargetPath -eq $I2P_SELF) -and ($old.IconLocation -like ($icoPath+''*''))){ $need=$false }',
+  '  }',
+  '  if($need){',
+  '    $sc=(New-Object -ComObject WScript.Shell).CreateShortcut($lnkPath)',
+  '    $sc.TargetPath=$I2P_SELF',
+  '    $sc.WorkingDirectory=(Split-Path -Parent $I2P_SELF)',
+  '    $sc.IconLocation=($icoPath+'',0'')',
+  '    $sc.Save()',
+  '    Write-Host (''   Desktop shortcut ready: ''+$lnkPath)',
+  '  }',
+  '}catch{ }',
   'Write-Host ''''',
   'Write-Host ''  ==============================================================''',
   'Write-Host (''   IMG2PIXEL is running :  ''+$url)',
@@ -89,7 +120,13 @@ $psLines=@(
 )
 $ps=($psLines -join $nl)
 
-# ---------- 組檔 ----------
+# ---------- inject the embedded icon as base64 ----------
+$q=[char]39
+$icoLine='$I2P_ICO_B64='+$q+[Convert]::ToBase64String([IO.File]::ReadAllBytes($ico))+$q
+$ps=$ps.Replace('@ICO@',$icoLine)
+if(-not $ps.Contains('$I2P_ICO_B64')){ throw 'ICO injection failed' }
+
+# ---------- assemble ----------
 $content = $pre
 $content += '#I2P_PS_START#'+$nl + $ps + $nl
 $content += '#I2P_PS_END#'+$nl

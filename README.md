@@ -16,8 +16,9 @@
 
 ## 開始使用（Windows）
 
-**雙擊 `img2pixel.bat`**——它是**單一檔案**，內含整套工具（內嵌 `img2pixel.html`）與本機小伺服器：
-雙擊後自動起伺服器（純 Windows 內建 HttpListener，**不需要 Python**）並開好瀏覽器，網址 `http://localhost:8799/`（port 被占用時會自動換下一個）。用完把黑色視窗關掉即可。
+**雙擊 `img2pixel.bat`**——它是**單一檔案**，內含整套工具（內嵌 `img2pixel.html`）、本機小伺服器與**像素風圖示**：
+雙擊後自動起伺服器（純 Windows 內建 HttpListener，**不需要 Python**）並開好瀏覽器，網址 `http://localhost:8799/`（port 被占用時會自動換下一個）。
+**第一次執行會在桌面建立「img2pixel」捷徑**（金色像素龍頭圖示），之後從捷徑開啟更順手。用完把黑色視窗關掉即可。
 
 > **為什麼不要直接雙擊 `img2pixel.html`？**
 > 用檔案開啟（`file://`）時，Chromium 會把「下載」的檔案標記成 **ZoneId=4（限制的網站）**，Windows 預設**封鎖開啟／解壓縮**（會跳「Windows 已封鎖了對這個檔案的存取」）。
@@ -27,7 +28,9 @@
 
 ### 給維護者
 
-`img2pixel.bat` 是從 `img2pixel.html` 產生的：改完 HTML 後執行 `build-standalone.ps1`（PowerShell）重新產生。HTML 直接雙擊仍然能完整使用，只是匯出檔案會被封鎖（如上）。
+- `img2pixel.bat` 是從 `img2pixel.html` 產生的：改完 HTML 後執行 `build-standalone.ps1`（PowerShell）重新產生；它也會把 `img2pixel.ico` 以 base64 內嵌進 .bat。
+- `img2pixel.ico` 由 `draw-ico.js`（Node）從 16×16 手刻像素格產生（多尺寸 BMP frame），改圖示就編輯它的 `GRID` 再重跑。
+- HTML 直接雙擊仍然能完整使用，只是匯出檔案會被封鎖（如上）。
 
 ## 使用說明
 
