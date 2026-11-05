@@ -167,7 +167,7 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
         <li>刀光位置怪怪的 → 「面向」選對（右/左），或關掉刀光再用「編輯像素」自己補。</li>
         <li>腿被切壞（下半部怪怪的）→ 程序切腿邊界不適合這張圖，把「腿步」調小、或用編輯像素修。</li>
         <li>限色關閉（全彩）→ 不建議，遊戲素材要乾淨色塊。</li>
-        <li>匯出的 ZIP／PNG 被 Windows 封鎖（無法解壓）→ 這是「用檔案直接開啟（file://）時下載會被標成限制區域」造成的：改用同一資料夾內「<b>img2pixel.bat</b>」（單一檔案、內含整個工具）開啟即可正常存檔；已做出的檔案可右鍵「內容」→勾「解除封鎖」。</li>
+        <li>匯出的 ZIP／PNG 被 Windows 封鎖（無法解壓）→ 這是「用檔案直接開啟（file://）時下載會被標成限制區域」造成的：改用同一資料夾內「<b>img2pixel.bat</b>」（單一檔案、內含整個工具）開啟即可正常存檔；啟動後的黑視窗會自動消失，背景伺服器在你關掉分頁後約 15 分鐘自動收工，「專案」區的「<b>關閉伺服器</b>」按鈕（單檔版才有）可以立刻關。已做出的檔案可右鍵「內容」→勾「解除封鎖」。</li>
       </ul>
       <b>轉完之後</b>：把 sheet 或 ZIP 交出來時，順便說一聲「這是誰／走路幾幅／攻擊幾幅」，就能直接接進遊戲的幀動畫。
     </div>
@@ -353,7 +353,8 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padd
         <input type="file" id="projFile" accept=".json,application/json" class="hidden">
       </div>
       <div class="row"><label><input type="checkbox" id="autosave" checked> 自動存檔（本機瀏覽器）</label>
-        <button id="btnProjClear" title="清除瀏覽器裡的自動存檔">清自動存檔</button></div>
+        <button id="btnProjClear" title="清除瀏覽器裡的自動存檔">清自動存檔</button>
+        <button id="btnStopSrv" class="hidden" title="關掉單檔版 img2pixel.bat 在背景跑的小伺服器（工具頁面本身不受影響）">關閉伺服器</button></div>
       <div class="note" id="saveInfo">自動存檔：還沒存過（關鍵操作後約 1 秒自動存；來源圖會縮到 512px 以內，完整畫質請用「存專案」）</div>
     </div>
   </div>
@@ -2011,6 +2012,24 @@ function makeDemo(){
   $('helpBox').onclick=e=>{ if(e.target===$('helpBox')) $('helpBox').classList.add('hidden'); };
   // 直接用檔案開啟（file://）時提醒：下載會被 Windows 標記 ZoneId=4 而封鎖解壓（改用 img2pixel.bat，單檔內含工具＋本機伺服器）
   if(location.protocol==='file:') $('fileHint').classList.remove('hidden');
+  // 單檔版（img2pixel.bat）：偵測背景小伺服器 → 顯示「關閉伺服器」按鈕＋每 10 秒心跳保活
+  if(location.protocol==='http:'){
+    (function(){
+      const btn=$('btnStopSrv');
+      try{
+        fetch('/ping',{cache:'no-store'}).then(r=>r.text()).then(t=>{
+          if(t!=='img2pixel-local-server') return;
+          btn.classList.remove('hidden');
+          btn.onclick=()=>{
+            fetch('/stop',{cache:'no-store'}).catch(()=>{});
+            btn.classList.add('hidden');
+            toast('背景伺服器已關閉（這個工具頁還是照常能用；匯出功能也不受影響）');
+          };
+          setInterval(()=>{ fetch('/ping',{cache:'no-store'}).catch(()=>{}); },10000);   // 心跳：頁面還在用就不閒置關機
+        }).catch(()=>{});
+      }catch(e){}
+    })();
+  }
   if(new URLSearchParams(location.search).has('demo')) makeDemo();
   else{ // 有自動存檔就問要不要接著上次做
     let au=null; try{ au=localStorage.getItem(AUTO_KEY); }catch(e){}
